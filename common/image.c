@@ -39,14 +39,14 @@
 
 //-------------------------------------------------------------------------
 
-void setPixel4BPP(IMAGE_T *image, int32_t x, int32_t y, int8_t index);
-void setPixel8BPP(IMAGE_T *image, int32_t x, int32_t y, int8_t index);
-void setPixelRGB565(IMAGE_T *image, int32_t x, int32_t y, const RGBA8_T *rgba);
-void setPixelDitheredRGB565(IMAGE_T *image, int32_t x, int32_t y, const RGBA8_T *rgba);
-void setPixelRGB888(IMAGE_T *image, int32_t x, int32_t y, const RGBA8_T *rgba);
-void setPixelRGBA16(IMAGE_T *image, int32_t x, int32_t y, const RGBA8_T *rgba);
-void setPixelDitheredRGBA16(IMAGE_T *image, int32_t x, int32_t y, const RGBA8_T *rgba);
-void setPixelRGBA32(IMAGE_T *image, int32_t x, int32_t y, const RGBA8_T *rgba);
+void setPixel4BPP(IMAGE_T *image, int32_t x, int32_t y, int32_t num, int8_t index);
+void setPixel8BPP(IMAGE_T *image, int32_t x, int32_t y, int32_t num, int8_t index);
+void setPixelRGB565(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
+void setPixelDitheredRGB565(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
+void setPixelRGB888(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
+void setPixelRGBA16(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
+void setPixelDitheredRGBA16(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
+void setPixelRGBA32(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
 
 void getPixel4BPP(IMAGE_T *image, int32_t x, int32_t y, int8_t *index);
 void getPixel8BPP(IMAGE_T *image, int32_t x, int32_t y, int8_t *index);
@@ -176,15 +176,7 @@ clearImageIndexed(
 {
     if (image->setPixelIndexed != NULL)
     {
-        int j;
-        for (j = 0 ; j < image->height ; j++)
-        {
-            int i;
-            for (i = 0 ; i < image->width ; i++)
-            {
-                image->setPixelIndexed(image, i, j, index);
-            }
-        }
+	image->setPixelIndexed(image, 0, 0, image->height * image->width, index);
     }
 }
 
@@ -197,15 +189,7 @@ clearImageRGB(
 {
     if (image->setPixelDirect != NULL)
     {
-        int j;
-        for (j = 0 ; j < image->height ; j++)
-        {
-            int i;
-            for (i = 0 ; i < image->width ; i++)
-            {
-                image->setPixelDirect(image, i, j, rgb);
-            }
-        }
+	image->setPixelDirect(image, 0, 0, image->height * image->width, rgb);
     }
 }
 
@@ -216,16 +200,20 @@ setPixelIndexed(
     IMAGE_T *image,
     int32_t x,
     int32_t y,
+    int32_t num,
     int8_t index)
 {
     bool result = false;
+    int32_t origin = (y * image->width) + x;
+    int32_t max = image->width * image->height;
+    if (origin + num > max) num = max - origin;
 
     if ((image->setPixelIndexed != NULL) &&
         (x >= 0) && (x < image->width) &&
         (y >= 0) && (y < image->height))
     {
         result = true;
-        image->setPixelIndexed(image, x, y, index);
+        image->setPixelIndexed(image, x, y, num, index);
     }
 
     return result;
@@ -238,16 +226,20 @@ setPixelRGB(
     IMAGE_T *image,
     int32_t x,
     int32_t y,
+    int32_t num,
     const RGBA8_T *rgb)
 {
     bool result = false;
+    int32_t origin = (y * image->width) + x;
+    int32_t max = image->width * image->height;
+    if (origin + num > max) num = max - origin;
 
     if ((image->setPixelDirect != NULL) &&
         (x >= 0) && (x < image->width) &&
         (y >= 0) && (y < image->height))
     {
         result = true;
-        image->setPixelDirect(image, x, y, rgb);
+        image->setPixelDirect(image, x, y, num, rgb);
     }
 
     return result;
@@ -322,6 +314,22 @@ destroyImage(
     image->getPixelIndexed = NULL;
 }
 
+//-------------------------------------------------------------------------
+
+void memfill(void *dest, size_t destsize, size_t elemsize) {
+        char    *nextdest = (char *) dest + elemsize;
+        size_t  movesize, donesize = elemsize;
+
+        destsize -= elemsize;
+        while (destsize) {
+                movesize = (donesize < destsize) ? donesize : destsize;
+                memcpy(nextdest, dest, movesize);
+                nextdest += movesize;
+                destsize -= movesize;
+                donesize += movesize;
+        }
+}
+
 //-----------------------------------------------------------------------
 
 void
@@ -329,19 +337,69 @@ setPixel4BPP(
     IMAGE_T *image,
     int32_t x,
     int32_t y,
+    int32_t num,
     int8_t index)
 {
     index &= 0x0F;
 
-    uint8_t *value = (uint8_t*)(image->buffer + (x/2) + (y *image->pitch));
+    uint8_t *value = (uint8_t*)(image->buffer + (x/2) + (y * image->pitch));
 
-    if (x % 2)
-    {
-        *value = (*value & 0xF0) | (index);
-    }
-    else
-    {
-        *value = (*value & 0x0F) | (index << 4);
+    if (num == 0 || num == 1) {
+	if (x % 2) {
+	    *value = (*value & 0xF0) | (index);		// odd
+	} else {
+	    *value = (*value & 0x0F) | (index << 4);	// even
+	}
+    } else if (num == 2) {
+	if (x % 2) {  // start odd
+	    *value = (*value & 0xF0) | (index);
+	    value++;
+	    *value = (*value & 0x0F) | (index << 4);
+	} else {				// start even 1 byte
+	    *value = (index) | (index << 4);
+	}
+    } else if (num == 3) {
+	if (x % 2) {	// start odd
+	    *value = (*value & 0xF0) | (index);	// odd
+	    value++;
+	    *value = (index) | (index << 4);	// even odd
+	} else {
+	    *value = (index) | (index << 4);	// even odd
+	    value++;
+	    *value = (*value & 0x0F) | (index << 4); // even
+	}
+    } else if (num == 4) {
+	if (x % 2) {	// start odd
+	    *value = (*value & 0xF0) | (index);	// odd
+	    value++;
+	    *value = (index) | (index << 4);	// even odd
+	    value++;
+	    *value = (*value & 0x0F) | (index << 4); // even
+	} else {
+	    *value = (index) | (index << 4);	// even odd
+	    value++;
+	    *value = (index) | (index << 4);	// even odd
+	}
+    } else if (num >= 5) {
+	int byt = num / 2;
+	int odd = num % 2;
+	if (x % 2) {	// start odd
+	    *value = (*value & 0xF0) | (index);	// odd
+	    value++;
+	    *value = (index) | (index << 4);	// even odd
+	    memfill( value, byt, sizeof(uint8_t) );	// even odd even odd
+	    if (odd == 0) {
+		value += byt;
+		*value = (*value & 0x0F) | (index << 4); // even
+	    }
+	} else {
+	    *value = (index) | (index << 4);	// even odd
+	    memfill( value, byt, sizeof(uint8_t) );	// even odd even odd
+	    if (odd == 1) {
+		value += byt;
+		*value = (*value & 0xF0) | (index); // odd
+	    }
+	}
     }
 }
 
@@ -352,9 +410,13 @@ setPixel8BPP(
     IMAGE_T *image,
     int32_t x,
     int32_t y,
+    int32_t num,
     int8_t index)
 {
-    *(uint8_t*)(image->buffer + x + (y * image->pitch)) = index;
+    uint8_t *value;  value = (uint8_t*) (image->buffer + x + (y * image->pitch));
+    *value = index;
+    if (num >= 2)
+	memfill( value, num, sizeof(uint8_t) );
 }
 
 //-----------------------------------------------------------------------
@@ -364,6 +426,7 @@ setPixelRGB565(
     IMAGE_T *image,
     int32_t x,
     int32_t y,
+    int32_t num,
     const RGBA8_T *rgba)
 {
     uint8_t r5 = rgba->red >> 3;
@@ -371,7 +434,11 @@ setPixelRGB565(
     uint8_t b5 = rgba->blue >> 3;
 
     uint16_t pixel = (r5 << 11) | (g6 << 5) | b5;
-    *(uint16_t*)(image->buffer + (x * 2) + (y *image->pitch)) = pixel;
+    uint16_t *value;  value = (uint16_t*) (image->buffer + (x * 2) + (y *image->pitch));
+
+    *value = pixel;
+    if (num >= 2)
+	memfill( value, num, sizeof(uint16_t) );
 }
 
 //-----------------------------------------------------------------------
@@ -381,6 +448,7 @@ setPixelDitheredRGB565(
     IMAGE_T *image,
     int32_t x,
     int32_t y,
+    int32_t num,
     const RGBA8_T *rgba)
 {
     static int16_t dither8[64] =
@@ -407,32 +475,29 @@ setPixelDitheredRGB565(
         3, 2, 2, 2, 2, 2, 2, 2,
     };
 
-    int32_t index = (x & 7) | ((y & 7) << 3);
+    int32_t i;
+    for (i=0; i < num; i++) {
+	int32_t index = (x & 7) | ((y & 7) << 3);
 
-    int16_t r = rgba->red + dither8[index];
+	int16_t r = rgba->red + dither8[index];
+	if (r > 255) r = 255;
 
-    if (r > 255)
-    {
-        r = 255;
+	int16_t g = rgba->green + dither4[index];
+	if (g > 255) g = 255;
+
+	int16_t b = rgba->blue + dither8[index];
+	if (b > 255) b = 255;
+
+	RGBA8_T dithered = { r, g, b, rgba->alpha };
+
+	setPixelRGB565(image, x, y, 1, &dithered);
+
+	x++;
+	if (x > image->width) {
+	    x = 0; y++;
+	    if (y > image->height) return;
+	}
     }
-
-    int16_t g = rgba->green + dither4[index];
-
-    if (g > 255)
-    {
-        g = 255;
-    }
-
-    int16_t b = rgba->blue + dither8[index];
-
-    if (b > 255)
-    {
-        b = 255;
-    }
-
-    RGBA8_T dithered = { r, g, b, rgba->alpha };
-
-    setPixelRGB565(image, x, y, &dithered);
 }
 
 //-------------------------------------------------------------------------
@@ -442,12 +507,15 @@ setPixelRGB888(
     IMAGE_T *image,
     int32_t x,
     int32_t y,
+    int32_t num,
     const RGBA8_T *rgba)
 {
-    uint8_t *line = (uint8_t *)(image->buffer) + (y*image->pitch) + (3*x);
+    uint8_t *line;  line = (uint8_t *) (image->buffer) + (y*image->pitch) + (3*x);
     line[0] = rgba->red;
     line[1] = rgba->green;
     line[2] = rgba->blue;
+    if (num >= 2)
+	memfill( line, num, sizeof(uint8_t) * 3 );
 }
 
 //-----------------------------------------------------------------------
@@ -457,6 +525,7 @@ setPixelRGBA16(
     IMAGE_T *image,
     int32_t x,
     int32_t y,
+    int32_t num,
     const RGBA8_T *rgba)
 {
     uint8_t r4 = rgba->red  >> 4;
@@ -465,7 +534,11 @@ setPixelRGBA16(
     uint8_t a4 = rgba->alpha >> 4;
 
     uint16_t pixel = (r4 << 12) | (g4 << 8) | (b4 << 4) | a4;
-    *(uint16_t*)(image->buffer + (x * 2) + (y *image->pitch)) = pixel;
+    uint16_t *value;  value = (uint16_t*) (image->buffer + (x * 2) + (y *image->pitch));
+
+    *value = pixel;
+    if (num >= 2)
+	memfill( value, num, sizeof(uint16_t) );
 }
 
 //-----------------------------------------------------------------------
@@ -475,6 +548,7 @@ setPixelDitheredRGBA16(
     IMAGE_T *image,
     int32_t x,
     int32_t y,
+    int32_t num,
     const RGBA8_T *rgba)
 {
     static int16_t dither16[64] =
@@ -489,39 +563,32 @@ setPixelDitheredRGBA16(
         11,   7,  10,   6,  10,   7,   9,   6,
     };
 
-    int32_t index = (x & 7) | ((y & 7) << 3);
+    int32_t i;
+    for (i=0; i < num; i++) {
+	int32_t index = (x & 7) | ((y & 7) << 3);
 
-    int16_t r = rgba->red + dither16[index];
+	int16_t r = rgba->red + dither16[index];
+	if (r > 255) r = 255;
 
-    if (r > 255)
-    {
-        r = 255;
+	int16_t g = rgba->green + dither16[index];
+	if (g > 255) g = 255;
+
+	int16_t b = rgba->blue + dither16[index];
+	if (b > 255) b = 255;
+
+	int16_t a = rgba->alpha + dither16[index];
+	if (b > 255) b = 255;
+
+	RGBA8_T dithered = { r, g, b, a };
+
+	setPixelRGBA16(image, x, y, 1, &dithered);
+
+	x++;
+	if (x > image->width) {
+	    x = 0; y++;
+	    if (y > image->height) return;
+	}
     }
-
-    int16_t g = rgba->green + dither16[index];
-
-    if (g > 255)
-    {
-        g = 255;
-    }
-
-    int16_t b = rgba->blue + dither16[index];
-
-    if (b > 255)
-    {
-        b = 255;
-    }
-
-    int16_t a = rgba->alpha + dither16[index];
-
-    if (b > 255)
-    {
-        b = 255;
-    }
-
-    RGBA8_T dithered = { r, g, b, a };
-
-    setPixelRGBA16(image, x, y, &dithered);
 }
 
 //-----------------------------------------------------------------------
@@ -531,6 +598,7 @@ setPixelRGBA32(
     IMAGE_T *image,
     int32_t x,
     int32_t y,
+    int32_t num,
     const RGBA8_T *rgba)
 {
     uint8_t *line = (uint8_t *)(image->buffer) + (y*image->pitch) + (4*x);
@@ -539,6 +607,8 @@ setPixelRGBA32(
     line[1] = rgba->green;
     line[2] = rgba->blue;
     line[3] = rgba->alpha;
+    if (num >= 2)
+	memfill( line, num, sizeof(uint8_t) * 4 );
 }
 
 //-----------------------------------------------------------------------

@@ -59,6 +59,18 @@ createResourceImageLayer(
     int32_t layer);
 
 void
+addElementImageLayerOffsetSource(
+    IMAGE_LAYER_T *il,
+    int32_t xOffset,
+    int32_t yOffset,
+    int32_t src_xOffset,
+    int32_t src_yOffset,
+    int32_t src_width,
+    int32_t src_height,
+    DISPMANX_DISPLAY_HANDLE_T display,
+    DISPMANX_UPDATE_HANDLE_T update);
+
+void
 addElementImageLayerOffset(
     IMAGE_LAYER_T *il,
     int32_t xOffset,

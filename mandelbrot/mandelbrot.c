@@ -91,7 +91,7 @@ mandelbrotImage(
 
             if (n < numberOfColours)
             {
-                setPixelRGB(image, i, j, &(colours[n]));
+                setPixelRGB(image, i, j, 1, &(colours[n]));
             }
         }
     }

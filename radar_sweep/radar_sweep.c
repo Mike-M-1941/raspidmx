@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
                     i = 255;
                 }
 
-                setPixelIndexed(&image, x, y, i);
+                setPixelIndexed(&image, x, y, 1, i);
             }
         }
     }

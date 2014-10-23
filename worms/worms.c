@@ -146,7 +146,7 @@ drawWorm(
         setPixelRGB(image,
                     (int32_t)floor(worm->body[i].x),
                     (int32_t)floor(worm->body[i].y),
-                    &(worm->colour));
+                    1, &(worm->colour));
     }
 }
 
@@ -165,7 +165,7 @@ undrawWorm(
         setPixelRGB(image,
                     (int32_t)floor(worm->body[i].x),
                     (int32_t)floor(worm->body[i].y),
-                    &colour);
+                    1, &colour);
     }
 }
 

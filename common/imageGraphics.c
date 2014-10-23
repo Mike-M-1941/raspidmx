@@ -75,15 +75,25 @@ imageBoxFilledIndexed(
     int32_t y2,
     int8_t index)
 {
-    int32_t sign_y = (y1 <= y2) ? 1 : -1;
     int32_t y = y1;
+    if (y1 > y2) {
+	y = y2;
+	y2 = y1;
+    }
+    int32_t x = x1;
+    if (x1 > x2) {
+	x = x2;
+	x2 = x1;
+    }
 
-    imageHorizontalLineIndexed(image, x1, x2, y, index);
+    if (x == 0 && x2 == image->width) {
+	setPixelIndexed(image, x, y, (y2-y) * image->width, index);
+	return;
+    }
 
-    while (y != y2)
-    {
-        y += sign_y;
-        imageHorizontalLineIndexed(image, x1, x2, y, index);
+    while (y <= y2) {
+        imageHorizontalLineIndexed(image, x, x2, y, index);
+        y++;
     }
 }
 
@@ -98,15 +108,25 @@ imageBoxFilledRGB(
     int32_t y2,
     const RGBA8_T *rgb)
 {
-    int32_t sign_y = (y1 <= y2) ? 1 : -1;
     int32_t y = y1;
+    if (y1 > y2) {
+	y = y2;
+	y2 = y1;
+    }
+    int32_t x = x1;
+    if (x1 > x2) {
+	x = x2;
+	x2 = x1;
+    }
 
-    imageHorizontalLineRGB(image, x1, x2, y, rgb);
+    if (x == 0 && x2 == image->width) {
+	setPixelRGB(image, x, y, (y2-y) * image->width, rgb);
+	return;
+    }
 
-    while (y != y2)
-    {
-        y += sign_y;
-        imageHorizontalLineRGB(image, x1, x2, y, rgb);
+    while (y <= y2) {
+        imageHorizontalLineRGB(image, x, x2, y, rgb);
+        y++;
     }
 }
 
@@ -140,7 +160,7 @@ imageLineIndexed(
         int32_t x = x1;
         int32_t y = y1;
 
-        setPixelIndexed(image, x, y, index);
+        setPixelIndexed(image, x, y, 1, index);
 
         if (dx > dy)
         {
@@ -162,7 +182,7 @@ imageLineIndexed(
                     y += sign_y;
                 }
 
-                setPixelIndexed(image, x, y, index);
+                setPixelIndexed(image, x, y, 1, index);
             }
         }
         else
@@ -185,7 +205,7 @@ imageLineIndexed(
                     x += sign_x;
                 }
 
-                setPixelIndexed(image, x, y, index);
+                setPixelIndexed(image, x, y, 1, index);
             }
         }
     }
@@ -221,7 +241,7 @@ imageLineRGB(
         int32_t x = x1;
         int32_t y = y1;
 
-        setPixelRGB(image, x, y, rgb);
+        setPixelRGB(image, x, y, 1, rgb);
 
         if (dx > dy)
         {
@@ -243,7 +263,7 @@ imageLineRGB(
                     y += sign_y;
                 }
 
-                setPixelRGB(image, x, y, rgb);
+                setPixelRGB(image, x, y, 1, rgb);
             }
         }
         else
@@ -266,7 +286,7 @@ imageLineRGB(
                     x += sign_x;
                 }
 
-                setPixelRGB(image, x, y, rgb);
+                setPixelRGB(image, x, y, 1, rgb);
             }
         }
     }
@@ -282,16 +302,13 @@ imageHorizontalLineIndexed(
     int32_t y,
     int8_t index)
 {
-    int32_t sign_x = (x1 <= x2) ? 1 : -1;
     int32_t x = x1;
-
-    setPixelIndexed(image, x, y, index);
-
-    while (x != x2)
-    {
-        x += sign_x;
-        setPixelIndexed(image, x, y, index);
+    if (x1 > x2) {
+	x = x2;
+	x2 = x1;
     }
+
+    setPixelIndexed(image, x, y, (x2 - x), index);
 }
 
 //-------------------------------------------------------------------------
@@ -304,16 +321,13 @@ imageHorizontalLineRGB(
     int32_t y,
     const RGBA8_T *rgb)
 {
-    int32_t sign_x = (x1 <= x2) ? 1 : -1;
     int32_t x = x1;
-
-    setPixelRGB(image, x, y, rgb);
-
-    while (x != x2)
-    {
-        x += sign_x;
-        setPixelRGB(image, x, y, rgb);
+    if (x1 > x2) {
+	x = x2;
+	x2 = x1;
     }
+
+    setPixelRGB(image, x, y, (x2 - x), rgb);
 }
 
 //-------------------------------------------------------------------------
@@ -329,12 +343,12 @@ imageVerticalLineIndexed(
     int32_t sign_y = (y1 <= y2) ? 1 : -1;
     int32_t y = y1;
 
-    setPixelIndexed(image, x, y, index);
+    setPixelIndexed(image, x, y, 1, index);
 
     while (y != y2)
     {
         y += sign_y;
-        setPixelIndexed(image, x, y, index);
+        setPixelIndexed(image, x, y, 1, index);
     }
 }
 
@@ -351,12 +365,12 @@ imageVerticalLineRGB(
     int32_t sign_y = (y1 <= y2) ? 1 : -1;
     int32_t y = y1;
 
-    setPixelRGB(image, x, y, rgb);
+    setPixelRGB(image, x, y, 1, rgb);
 
     while (y != y2)
     {
         y += sign_y;
-        setPixelRGB(image, x, y, rgb);
+        setPixelRGB(image, x, y, 1, rgb);
     }
 }
 

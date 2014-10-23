@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
                 rgba.alpha = 255;
             }
 
-            setPixelRGB(&image, x, y, &rgba);
+            setPixelRGB(&image, x, y, 1, &rgba);
         }
     }
 

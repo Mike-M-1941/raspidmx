@@ -4665,7 +4665,7 @@ drawCharIndexed(
             {
                 if ((byte >> (FONT_WIDTH - i - 1)) & 1 )
                 {
-                    setPixelIndexed(image, x + i, y + j, index);
+                    setPixelIndexed(image, x + i, y + j, 1, index);
                 }
             }
         }
@@ -4694,7 +4694,7 @@ drawCharRGB(
             {
                 if ((byte >> (FONT_WIDTH - i - 1)) & 1 )
                 {
-                    setPixelRGB(image, x + i, y + j, rgb);
+                    setPixelRGB(image, x + i, y + j, 1, rgb);
                 }
             }
         }

@@ -83,6 +83,40 @@ createResourceImageLayer(
 //-------------------------------------------------------------------------
 
 void
+addElementImageLayerOffsetSource(
+    IMAGE_LAYER_T *il,
+    int32_t xOffset,
+    int32_t yOffset,
+    int32_t src_xOffset,
+    int32_t src_yOffset,
+    int32_t src_width,
+    int32_t src_height,
+    DISPMANX_DISPLAY_HANDLE_T display,
+    DISPMANX_UPDATE_HANDLE_T update)
+{
+    if (src_xOffset + src_width > il->image.width)
+	src_width = il->image.width - src_xOffset;
+    if (src_yOffset + src_height > il->image.height)
+	src_height = il->image.height - src_yOffset;
+
+    vc_dispmanx_rect_set(&(il->srcRect),
+                         src_xOffset << 16,
+                         src_yOffset << 16,
+                         src_width << 16,
+                         src_height << 16);
+
+    vc_dispmanx_rect_set(&(il->dstRect),
+                         xOffset,
+                         yOffset,
+                         src_width,
+                         src_height);
+
+    addElementImageLayer(il, display, update);
+}
+
+//-------------------------------------------------------------------------
+
+void
 addElementImageLayerOffset(
     IMAGE_LAYER_T *il,
     int32_t xOffset,
