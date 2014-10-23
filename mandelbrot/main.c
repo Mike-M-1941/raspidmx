@@ -40,7 +40,7 @@
 #include "bcm_host.h"
 
 #include "backgroundLayer.h"
-#include "font.h"
+#include "simple_font.h"
 #include "imageGraphics.h"
 #include "imageLayer.h"
 #include "key.h"

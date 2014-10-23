@@ -35,8 +35,10 @@
 
 #include "backgroundLayer.h"
 #include "imageLayer.h"
+#include "imageGraphics.h"
 #include "key.h"
 #include "loadpng.h"
+#include "freetype_font.h"
 
 #include "bcm_host.h"
 
@@ -52,7 +54,7 @@ const char *program = NULL;
 
 void usage(void)
 {
-    fprintf(stderr, "Usage: %s [-b <RGBA>] <file.png>\n", program);
+    fprintf(stderr, "Usage: %s [-b <RGBA>] [-f <ttf file>] <file.png>\n", program);
     fprintf(stderr, "    -b - set background colour 16 bit RGBA\n");
     fprintf(stderr, "         e.g. 0x000F is opaque black\n");
 
@@ -64,6 +66,8 @@ void usage(void)
 int main(int argc, char *argv[])
 {
     uint16_t background = 0x000F;
+    char *fontname = NULL;
+    int   fontnum = 0;
 
     program = basename(argv[0]);
 
@@ -71,13 +75,16 @@ int main(int argc, char *argv[])
 
     int opt = 0;
 
-    while ((opt = getopt(argc, argv, "b:")) != -1)
+    while ((opt = getopt(argc, argv, "b:f:")) != -1)
     {
         switch(opt)
         {
         case 'b':
 
             background = strtol(optarg, NULL, 16);
+            break;
+        case 'f':
+	    fontname = optarg;
             break;
 
         default:
@@ -97,6 +104,13 @@ int main(int argc, char *argv[])
     //---------------------------------------------------------------------
 
     bcm_host_init();
+
+    //---------------------------------------------------------------------
+
+    init_Freetype_Render();
+    if( fontname != NULL) {
+	fontnum = load_Freetype_Font( fontname );
+    }
 
     //---------------------------------------------------------------------
 
@@ -121,6 +135,30 @@ int main(int argc, char *argv[])
     }
     createResourceImageLayer(&imageLayer, 1);
 
+    //---------------------------------------------------------------------
+
+    if( fontname != NULL) {
+	RGBA8_T green = {  0, 255,   0, 255};
+	RGBA8_T white = {200, 200, 200, 255};
+
+	imageHorizontalLineRGB( &(imageLayer.image), 50, 1800,  50, &white );
+	imageHorizontalLineRGB( &(imageLayer.image), 50, 1800, 100, &white );
+	imageHorizontalLineRGB( &(imageLayer.image), 50, 1800, 250, &white );
+	imageHorizontalLineRGB( &(imageLayer.image), 50, 1800, 300, &white );
+
+
+	draw_FT_CharRGB( 100, 100, 'W', fontnum, 50, &green, &(imageLayer.image) );
+
+	char *str = "hello from earth. Come visit anytime!";
+	int str_len = measure_FT_String(str,fontnum,50);
+	draw_FT_StringRGB( 300, 500, str, fontnum, 50, &green, &(imageLayer.image) );
+	imageVerticalLineRGB( &(imageLayer.image), 300,           400, 550, &white );
+	imageVerticalLineRGB( &(imageLayer.image), 300 + str_len, 400, 550, &white );
+
+	//draw_FT_StringRGB( 300, 300, fontname, fontnum, 50, &green, &(imageLayer.image) );
+	draw_FT_StringRGB( 300, 300, "Wogj_X", fontnum, 50, &green, &(imageLayer.image) );
+	changeSourceAndUpdateImageLayer( &imageLayer );
+    }
     //---------------------------------------------------------------------
 
     int32_t outWidth = imageLayer.image.width;

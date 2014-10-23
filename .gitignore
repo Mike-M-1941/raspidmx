@@ -6,6 +6,10 @@
 
 core
 
+# ignore truetype files
+
+*.ttf
+
 # programs
 
 game/game

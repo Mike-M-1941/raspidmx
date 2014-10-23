@@ -60,6 +60,7 @@ struct IMAGE_T_
     uint16_t bitsPerPixel;
     uint32_t size;
     void *buffer;
+    void (*setPixelAlpha)(IMAGE_T*, int32_t, int32_t, int32_t, const RGBA8_T*);
     void (*setPixelDirect)(IMAGE_T*, int32_t, int32_t, int32_t, const RGBA8_T*);
     void (*getPixelDirect)(IMAGE_T*, int32_t, int32_t, RGBA8_T*);
     void (*setPixelIndexed)(IMAGE_T*, int32_t, int32_t, int32_t, int8_t);
@@ -121,6 +122,14 @@ setPixelIndexed(
     int32_t y,
     int32_t num,
     int8_t index);
+
+bool
+setPixelRGBA(
+    IMAGE_T *image,
+    int32_t x,
+    int32_t y,
+    int32_t num,
+    const RGBA8_T *rgb);
 
 bool
 setPixelRGB(

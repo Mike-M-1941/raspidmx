@@ -48,6 +48,10 @@ void setPixelRGBA16(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGB
 void setPixelDitheredRGBA16(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
 void setPixelRGBA32(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
 
+void setPixelAlphaRGBA16(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
+void setPixelAlphaRGB888(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
+void setPixelAlphaRGBA32(IMAGE_T *image, int32_t x, int32_t y, int32_t num, const RGBA8_T *rgba);
+
 void getPixel4BPP(IMAGE_T *image, int32_t x, int32_t y, int8_t *index);
 void getPixel8BPP(IMAGE_T *image, int32_t x, int32_t y, int8_t *index);
 void getPixelRGB565(IMAGE_T *image, int32_t x, int32_t y, RGBA8_T *rgba);
@@ -69,6 +73,7 @@ bool initImage(
     case VC_IMAGE_4BPP:
 
         image->bitsPerPixel = 4;
+        image->setPixelAlpha = NULL;
         image->setPixelDirect = NULL;
         image->getPixelDirect = NULL;
         image->setPixelIndexed = setPixel4BPP;
@@ -79,6 +84,7 @@ bool initImage(
     case VC_IMAGE_8BPP:
 
         image->bitsPerPixel = 8;
+        image->setPixelAlpha = NULL;
         image->setPixelDirect = NULL;
         image->getPixelDirect = NULL;
         image->setPixelIndexed = setPixel8BPP;
@@ -92,10 +98,12 @@ bool initImage(
 
         if (dither)
         {
+            image->setPixelAlpha = setPixelDitheredRGB565;
             image->setPixelDirect = setPixelDitheredRGB565;
         }
         else
         {
+            image->setPixelAlpha = setPixelDitheredRGB565;
             image->setPixelDirect = setPixelRGB565;
         }
         image->getPixelDirect = getPixelRGB565;
@@ -107,6 +115,7 @@ bool initImage(
     case VC_IMAGE_RGB888:
 
         image->bitsPerPixel = 24;
+        image->setPixelAlpha = setPixelAlphaRGB888;
         image->setPixelDirect = setPixelRGB888;
         image->getPixelDirect = getPixelRGB888;
         image->setPixelIndexed = NULL;
@@ -119,10 +128,12 @@ bool initImage(
         image->bitsPerPixel = 16;
         if (dither)
         {
+            image->setPixelAlpha = setPixelDitheredRGBA16;
             image->setPixelDirect = setPixelDitheredRGBA16;
         }
         else
         {
+            image->setPixelAlpha = setPixelAlphaRGBA16;
             image->setPixelDirect = setPixelRGBA16;
         }
         image->getPixelDirect = getPixelRGBA16;
@@ -134,6 +145,7 @@ bool initImage(
     case VC_IMAGE_RGBA32:
 
         image->bitsPerPixel = 32;
+        image->setPixelAlpha = setPixelAlphaRGBA32;
         image->setPixelDirect = setPixelRGBA32;
         image->getPixelDirect = getPixelRGBA32;
         image->setPixelIndexed = NULL;
@@ -240,6 +252,32 @@ setPixelRGB(
     {
         result = true;
         image->setPixelDirect(image, x, y, num, rgb);
+    }
+
+    return result;
+}
+
+//-------------------------------------------------------------------------
+
+bool
+setPixelRGBA(		// mix src and dest using alpha.
+    IMAGE_T *image,
+    int32_t x,
+    int32_t y,
+    int32_t num,
+    const RGBA8_T *rgb)
+{
+    bool result = false;
+    int32_t origin = (y * image->width) + x;
+    int32_t max = image->width * image->height;
+    if (origin + num > max) num = max - origin;
+
+    if ((image->setPixelDirect != NULL) &&
+        (x >= 0) && (x < image->width) &&
+        (y >= 0) && (y < image->height))
+    {
+        result = true;
+        image->setPixelAlpha(image, x, y, num, rgb);
     }
 
     return result;
@@ -387,14 +425,14 @@ setPixel4BPP(
 	    *value = (*value & 0xF0) | (index);	// odd
 	    value++;
 	    *value = (index) | (index << 4);	// even odd
-	    memfill( value, byt, sizeof(uint8_t) );	// even odd even odd
+	    memfill( value, sizeof(uint8_t) * byt, sizeof(uint8_t) );	// even odd even odd
 	    if (odd == 0) {
 		value += byt;
 		*value = (*value & 0x0F) | (index << 4); // even
 	    }
 	} else {
 	    *value = (index) | (index << 4);	// even odd
-	    memfill( value, byt, sizeof(uint8_t) );	// even odd even odd
+	    memfill( value, sizeof(uint8_t) * byt, sizeof(uint8_t) );	// even odd even odd
 	    if (odd == 1) {
 		value += byt;
 		*value = (*value & 0xF0) | (index); // odd
@@ -416,7 +454,7 @@ setPixel8BPP(
     uint8_t *value;  value = (uint8_t*) (image->buffer + x + (y * image->pitch));
     *value = index;
     if (num >= 2)
-	memfill( value, num, sizeof(uint8_t) );
+	memfill( value, sizeof(uint8_t) * num, sizeof(uint8_t) );
 }
 
 //-----------------------------------------------------------------------
@@ -438,7 +476,7 @@ setPixelRGB565(
 
     *value = pixel;
     if (num >= 2)
-	memfill( value, num, sizeof(uint16_t) );
+	memfill( value, sizeof(uint16_t) * num, sizeof(uint16_t) );
 }
 
 //-----------------------------------------------------------------------
@@ -510,12 +548,43 @@ setPixelRGB888(
     int32_t num,
     const RGBA8_T *rgba)
 {
-    uint8_t *line;  line = (uint8_t *) (image->buffer) + (y*image->pitch) + (3*x);
+    uint8_t *line;  line = (uint8_t *) (image->buffer) + (y * image->pitch) + (3 * x);
     line[0] = rgba->red;
     line[1] = rgba->green;
     line[2] = rgba->blue;
     if (num >= 2)
-	memfill( line, num, sizeof(uint8_t) * 3 );
+	memfill( line, sizeof(uint8_t) * 3 * num, sizeof(uint8_t) * 3 );
+}
+
+//-------------------------------------------------------------------------
+
+void
+setPixelAlphaRGB888(
+    IMAGE_T *image,
+    int32_t x,
+    int32_t y,
+    int32_t num,
+    const RGBA8_T *rgba)
+{
+    uint8_t *line;  line = (uint8_t *) (image->buffer) + (y * image->pitch) + (3 * x);
+    int ad = 255 - rgba->alpha;
+    int as = rgba->alpha;
+    int tmp;
+
+    tmp = ((line[0] * ad)/255) + ((rgba->red * as)/255);
+    line[0] = tmp < 255 ? (tmp >= 0 ? tmp : 0) : 255;
+    tmp = ((line[1] * ad)/255) + ((rgba->green * as)/255);
+    line[1] = tmp < 255 ? (tmp >= 0 ? tmp : 0) : 255;
+    tmp = ((line[2] * ad)/255) + ((rgba->blue * as)/255);
+    line[2] = tmp < 255 ? (tmp >= 0 ? tmp : 0) : 255;
+
+    if (num >= 2) {
+	if (x < image->width) {
+		setPixelAlphaRGB888( image, x + 1, y, num - 1, rgba );
+	} else {
+		setPixelAlphaRGB888( image, 0, y + 1, num - 1, rgba );
+	}
+    }
 }
 
 //-----------------------------------------------------------------------
@@ -534,11 +603,49 @@ setPixelRGBA16(
     uint8_t a4 = rgba->alpha >> 4;
 
     uint16_t pixel = (r4 << 12) | (g4 << 8) | (b4 << 4) | a4;
-    uint16_t *value;  value = (uint16_t*) (image->buffer + (x * 2) + (y *image->pitch));
+    uint16_t *value;  value = (uint16_t*) (image->buffer + (x * 2) + (y * image->pitch));
 
     *value = pixel;
     if (num >= 2)
-	memfill( value, num, sizeof(uint16_t) );
+	memfill( value, sizeof(uint16_t) * num, sizeof(uint16_t) );
+}
+
+//-----------------------------------------------------------------------
+
+void
+setPixelAlphaRGBA16(
+    IMAGE_T *image,
+    int32_t x,
+    int32_t y,
+    int32_t num,
+    const RGBA8_T *rgba)
+{
+    uint16_t *value;  value = (uint16_t*) (image->buffer + (x * 2) + (y *image->pitch));
+    uint8_t src_r4 = (*value & 0xF000) >> 8;
+    uint8_t src_g4 = (*value & 0x0F00) >> 4;
+    uint8_t src_b4 = (*value & 0x00F0);
+    uint8_t src_a4 = (*value & 0x000F);
+
+    int ad = 255 - rgba->alpha;
+    int as = rgba->alpha;
+    int tmp;
+
+    tmp = ((src_r4 * ad)/255) + ((rgba->red * as)/255);
+    src_r4 = tmp < 255 ? (tmp >= 0 ? tmp : 0) : 255;
+    tmp = ((src_g4 * ad)/255) + ((rgba->green * as)/255);
+    src_g4 = tmp < 255 ? (tmp >= 0 ? tmp : 0) : 255;
+    tmp = ((src_b4 * ad)/255) + ((rgba->blue * as)/255);
+    src_b4 = tmp < 255 ? (tmp >= 0 ? tmp : 0) : 255;
+
+    *value = ((src_r4 >> 4) << 12) | ((src_g4 >> 4) << 8) | ((src_b4 >> 4) << 4) | src_a4;
+
+    if (num >= 2) {
+	if (x < image->width) {
+		setPixelAlphaRGBA16( image, x + 1, y, num - 1, rgba );
+	} else {
+		setPixelAlphaRGBA16( image, 0, y + 1, num - 1, rgba );
+	}
+    }
 }
 
 //-----------------------------------------------------------------------
@@ -608,7 +715,38 @@ setPixelRGBA32(
     line[2] = rgba->blue;
     line[3] = rgba->alpha;
     if (num >= 2)
-	memfill( line, num, sizeof(uint8_t) * 4 );
+	memfill( line, sizeof(uint8_t) * 4 * num, sizeof(uint8_t) * 4 );
+}
+
+//-----------------------------------------------------------------------
+
+void
+setPixelAlphaRGBA32(
+    IMAGE_T *image,
+    int32_t x,
+    int32_t y,
+    int32_t num,
+    const RGBA8_T *rgba)
+{
+    uint8_t *line; line = (uint8_t *)(image->buffer) + (y * image->pitch) + (4 * x);
+    int ad = 255 - rgba->alpha;
+    int as = rgba->alpha;
+    int tmp;
+
+    tmp = ((line[0] * ad)/255) + ((rgba->red * as)/255);
+    line[0] = tmp < 255 ? (tmp >= 0 ? tmp : 0) : 255;
+    tmp = ((line[1] * ad)/255) + ((rgba->green * as)/255);
+    line[1] = tmp < 255 ? (tmp >= 0 ? tmp : 0) : 255;
+    tmp = ((line[2] * ad)/255) + ((rgba->blue * as)/255);
+    line[2] = tmp < 255 ? (tmp >= 0 ? tmp : 0) : 255;
+
+    if (num >= 2) {
+	if (x < image->width) {
+		setPixelAlphaRGBA32( image, x + 1, y, num - 1, rgba );
+	} else {
+		setPixelAlphaRGBA32( image, 0, y + 1, num - 1, rgba );
+	}
+    }
 }
 
 //-----------------------------------------------------------------------
