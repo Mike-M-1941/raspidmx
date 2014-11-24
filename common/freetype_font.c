@@ -21,6 +21,9 @@
 #include FT_FREETYPE_H
 #include "image.h"
 
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
 
 void draw_bitmap_Indexed( FT_Bitmap* bitmap, FT_Int x, FT_Int y, IMAGE_T *image, int ddx, int ddy, int8_t index ) {
 	FT_Int  i, j, p, q;
@@ -34,7 +37,7 @@ void draw_bitmap_Indexed( FT_Bitmap* bitmap, FT_Int x, FT_Int y, IMAGE_T *image,
 		for ( i = x, p = 0; i < x_max; i++, p++ ) {
 			if ( i < 0 || j < 0 || i >= mx || j >= my ) continue;
 			uint8_t  src = bitmap->buffer[q * bitmap->width + p];
-			if (src > 127) setPixelIndexed( image, ddx + i, ddy + j, 1, index );
+			if (src > 127) setPixelIndexed( image, ddx + i, dy, 1, index );
 		}
 	}
 }
@@ -61,8 +64,19 @@ void draw_bitmap_RGB( FT_Bitmap* bitmap, FT_Int x, FT_Int y, IMAGE_T *image, int
 }
 
 
+void drop_last_space_in_string( char *string ) {
+	int i = strlen( string );
+	while (string[i-1] == ' ') {
+		string[i-1] = '\0';
+		i = strlen( string );
+	}
+}
+
+
+
 static FT_Library	library;
 static FT_Face		*font_face = NULL;
+static char		**font_names;
 static int		fonts = 0;
 static int		max_fonts = 0;
 
@@ -75,22 +89,31 @@ void init_Freetype_Render( void ) {
 
 uint8_t load_Freetype_Font( const char *font_name ) {
 	struct stat	st;
-	int		result;
+	int		i, result;
 
 	result = stat( font_name, &st );
 	assert(result == 0);
 
 	if (fonts == 0) {
 		font_face = calloc(10, sizeof(FT_Face) );
+		font_names = calloc(10, sizeof(char *) );
+		font_names[0] = strdup( font_name );
 		FT_New_Face( library, font_name, 0, &( font_face[0] ) );
 		fonts++;
 		max_fonts = 10;
 		return 0;
 	}
+	for (i=0; i < fonts; i++) {
+		if (strncmp(font_names[i], font_name, 100) == 0) {
+			return( i );
+		}
+	}
 	if (fonts == max_fonts) {
 		max_fonts += 10;
 		font_face = realloc( font_face, sizeof(FT_Face) * max_fonts );
+		font_names = realloc( font_names, sizeof(char *) * max_fonts );
 	}
+	font_names[fonts] = strdup( font_name );
 	FT_New_Face( library, font_name, 0, &( font_face[fonts] ) );
 	fonts++;
 	return(fonts - 1);
@@ -114,7 +137,7 @@ int measure_FT_Char( uint8_t c, uint8_t font, uint16_t size ) {
 
 	FT_Set_Transform( font_face[font], 0, &pen );
 	error = FT_Load_Char( font_face[font], c, FT_LOAD_RENDER );
-	if ( error )  return;                 /* ignore errors */
+	if ( error )  return 0;                 /* ignore errors */
 
 	return( g_slot->bitmap_left + g_slot->bitmap.width );
 }
@@ -163,17 +186,19 @@ void draw_FT_CharRGB( int x, int y, uint8_t c, uint8_t font, uint16_t size, cons
 /* STRING *******************************************************************************************************/
 
 
-int measure_FT_String( const char *string, uint8_t font, uint16_t size) {
+int measure_FT_String( char *string, uint8_t font, uint16_t size) {
 	FT_GlyphSlot	g_slot;
 	FT_Vector	pen;
 	FT_Error	error;
 	int		n, nc;
 
+	drop_last_space_in_string( string );
+
 	assert(font < fonts);
 	g_slot = font_face[font]->glyph;
 
 	nc = strlen( string );
-	if (nc == 0) return;
+	if (nc == 0) return 0;
 
 	error = FT_Set_Char_Size( font_face[font], size * 18, size * 27, 256, 256 );
 	assert(error == 0);
@@ -193,11 +218,13 @@ int measure_FT_String( const char *string, uint8_t font, uint16_t size) {
 	return( max_x );
 }
 
-void draw_FT_StringIndexed( int x, int y, const char *string, uint8_t font, uint16_t size, int8_t index, IMAGE_T *image) {
+void draw_FT_StringIndexed( int x, int y, char *string, uint8_t font, uint16_t size, int8_t index, IMAGE_T *image) {
 	FT_GlyphSlot	g_slot;
 	FT_Vector	pen;
 	FT_Error	error;
 	int		n, nc;
+
+	drop_last_space_in_string( string );
 
 	assert(font < fonts);
 	g_slot = font_face[font]->glyph;
@@ -221,11 +248,13 @@ void draw_FT_StringIndexed( int x, int y, const char *string, uint8_t font, uint
 	}
 }
 
-void draw_FT_StringRGB( int x, int y, const char *string, uint8_t font, uint16_t size, const RGBA8_T *rgb, IMAGE_T *image) {
+void draw_FT_StringRGB( int x, int y, char *string, uint8_t font, uint16_t size, const RGBA8_T *rgb, IMAGE_T *image) {
 	FT_GlyphSlot	g_slot;
 	FT_Vector	pen;
 	FT_Error	error;
 	int		n, nc;
+
+	drop_last_space_in_string( string );
 
 	assert(font < fonts);
 	g_slot = font_face[font]->glyph;

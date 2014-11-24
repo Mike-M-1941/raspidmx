@@ -32,6 +32,10 @@
 #include "image.h"
 #include "imageLayer.h"
 
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
+
 //-------------------------------------------------------------------------
 
 void
@@ -41,7 +45,10 @@ initImageLayer(
     int32_t height,
     VC_IMAGE_TYPE_T type)
 {
-    initImage(&(il->image), type, width, height, false);
+    bool dithered = false;
+    if (type == VC_IMAGE_RGB565) dithered = true;
+
+    initImage(&(il->image), type, width, height, dithered);
 }
 
 //-------------------------------------------------------------------------
@@ -52,7 +59,6 @@ createResourceImageLayer(
     int32_t layer)
 {
     uint32_t vc_image_ptr;
-    int result = 0;
 
     il->layer = layer;
 
@@ -64,20 +70,7 @@ createResourceImageLayer(
             &vc_image_ptr);
     assert(il->resource != 0);
 
-    //---------------------------------------------------------------------
-
-    vc_dispmanx_rect_set(&(il->dstRect),
-                         0,
-                         0,
-                         il->image.width,
-                         il->image.height);
-
-    result = vc_dispmanx_resource_write_data(il->resource,
-                                             il->image.type,
-                                             il->image.pitch,
-                                             il->image.buffer,
-                                             &(il->dstRect));
-    assert(result == 0);
+    writeFlagImageLayer( il );
 }
 
 //-------------------------------------------------------------------------
@@ -162,7 +155,7 @@ addElementImageLayerCentered(
 
     addElementImageLayer(il, display, update);
 
-    vc_dispmanx_rect_set(&(il->dstRect),
+    vc_dispmanx_rect_set(&(il->fullRect),
                          0,
                          0,
                          il->image.width,
@@ -199,12 +192,34 @@ addElementImageLayer(
                                 DISPMANX_NO_ROTATE);
     assert(il->element != 0);
 
-    vc_dispmanx_rect_set(&(il->dstRect),
+    vc_dispmanx_rect_set(&(il->fullRect),
                          0,
                          0,
                          il->image.width,
                          il->image.height);
 }
+
+//-------------------------------------------------------------------------
+
+void writeFlagImageLayer(
+    IMAGE_LAYER_T *il)
+{
+    int result = vc_dispmanx_rect_set(&(il->fullRect),
+                         0,
+                         0,
+                         il->image.width,
+                         il->image.height);
+    assert(result == 0);
+
+    result = vc_dispmanx_resource_write_data(il->resource,
+                                             il->image.type,
+                                             il->image.pitch,
+                                             il->image.buffer,
+                                             &(il->fullRect));
+    assert(result == 0);
+    il->image_write_flag = 1;
+}
+
 
 //-------------------------------------------------------------------------
 
@@ -217,7 +232,7 @@ changeSourceImageLayer(
                                                  il->image.type,
                                                  il->image.pitch,
                                                  il->image.buffer,
-                                                 &(il->dstRect));
+                                                 &(il->fullRect));
     assert(result == 0);
 
     result = vc_dispmanx_element_change_source(update,
@@ -237,7 +252,7 @@ changeSourceAndUpdateImageLayer(
                                                  il->image.type,
                                                  il->image.pitch,
                                                  il->image.buffer,
-                                                 &(il->dstRect));
+                                                 &(il->fullRect));
     assert(result == 0);
 
     DISPMANX_UPDATE_HANDLE_T update = vc_dispmanx_update_start(0);

@@ -39,83 +39,69 @@
 //-------------------------------------------------------------------------
 
 void
-initScrollingLayer(SCROLLING_LAYER_T *sl,
+initScrollingLayerPNG(SCROLLING_LAYER_T *sl,
     const char* file,
     int32_t layer)
 {
-    int result = 0;
+    sl->image = calloc(1, sizeof(IMAGE_T) );
 
-    //---------------------------------------------------------------------
-    if (loadScrollingLayerPng(&sl->image, file, true, true) == false)
+    bool loaded = loadPng( sl->image, file);
+
+    int32_t max_x = sl->image->width;
+    int32_t max_y = sl->image->height;
+    if (loaded) expand_and_duplicate_Image( sl->image, sl->image->width, sl->image->height );
+
+    if (loaded == false)
     {
-        fprintf(stderr, "scrollingBgLayer: unable to load %s\n", file);
+        fprintf(stderr, "scrolling: unable to load %s\n", file);
         exit(EXIT_FAILURE);
     }
+    initScrollingLayerImage( sl, NULL, max_x, max_y, layer);
+}
 
-    sl->direction = 0;
-    sl->directionMax = 7;
 
-    sl->xDirections[0] = 0;
-    sl->xDirections[1] = 3;
-    sl->xDirections[2] = 4;
-    sl->xDirections[3] = 3;
-    sl->xDirections[4] = 0;
-    sl->xDirections[5] = -3;
-    sl->xDirections[6] = -4;
-    sl->xDirections[7] = -3;
+void
+initScrollingLayerImage(SCROLLING_LAYER_T *sl,
+    IMAGE_T *image,
+    int32_t max_x,
+    int32_t max_y,
+    int32_t layer)
+{
+    if (image != NULL) sl->image = image;
+    assert(sl->image != NULL);
 
-    sl->yDirections[0] = 4;
-    sl->yDirections[1] = 3;
-    sl->yDirections[2] = 0;
-    sl->yDirections[3] = -3;
-    sl->yDirections[4] = -4;
-    sl->yDirections[5] = -3;
-    sl->yDirections[6] = 0;
-    sl->yDirections[7] = 3;
+    sl->xOffsetMax = max_x;
+    sl->yOffsetMax = max_y;
+    sl->viewWidth = sl->viewHeight = 0;
+    sl->xOffset = sl->yOffset = 0;
+    sl->xStepper = sl->yStepper = 0;
+    sl->image_write_flag = 1;
+    sl->scroll_step_flag = 1;
+    sl->element = 0;
 
-    //---------------------------------------------------------------------
-
-    uint32_t vc_image_ptr;
+    uint32_t vc_image_ptr = 1;
 
     sl->layer = layer;
 
     sl->frontResource =
         vc_dispmanx_resource_create(
-            sl->image.type,
-            sl->image.width | (sl->image.pitch << 16),
-            sl->image.height | (sl->image.alignedHeight << 16),
+            sl->image->type,
+            sl->image->width | (sl->image->pitch << 16),
+            sl->image->height | (sl->image->alignedHeight << 16),
             &vc_image_ptr);
     assert(sl->frontResource != 0);
 
     sl->backResource =
         vc_dispmanx_resource_create(
-            sl->image.type,
-            sl->image.width | (sl->image.pitch << 16),
-            sl->image.height | (sl->image.alignedHeight << 16),
+            sl->image->type,
+            sl->image->width | (sl->image->pitch << 16),
+            sl->image->height | (sl->image->alignedHeight << 16),
             &vc_image_ptr);
     assert(sl->backResource != 0);
 
     //---------------------------------------------------------------------
 
-    vc_dispmanx_rect_set(&(sl->dstRect),
-                         0,
-                         0,
-                         sl->image.width,
-                         sl->image.height);
-
-    result = vc_dispmanx_resource_write_data(sl->frontResource,
-                                             sl->image.type,
-                                             sl->image.pitch,
-                                             sl->image.buffer,
-                                             &(sl->dstRect));
-    assert(result == 0);
-
-    result = vc_dispmanx_resource_write_data(sl->backResource,
-                                             sl->image.type,
-                                             sl->image.pitch,
-                                             sl->image.buffer,
-                                             &(sl->dstRect));
-    assert(result == 0);
+    writeFlagScrollingLayer( sl );
 }
 
 //-------------------------------------------------------------------------
@@ -127,36 +113,44 @@ addElementScrollingLayerCentered(
     DISPMANX_DISPLAY_HANDLE_T display,
     DISPMANX_UPDATE_HANDLE_T update)
 {
-    sl->viewWidth = sl->image.width / 2;
-    sl->viewHeight = sl->image.height / 2;
+    sl->viewWidth = sl->xOffsetMax;
+    sl->viewHeight = sl->yOffsetMax;
 
-    sl->xOffsetMax = sl->viewWidth - 1;
-    sl->xOffset = sl->xOffsetMax / 2;
+    if (sl->viewWidth > info->width)   sl->viewWidth = info->width;
+    if (sl->viewHeight > info->height) sl->viewHeight = info->height;
 
-    sl->yOffsetMax = sl->viewHeight - 1;
-    sl->yOffset = sl->yOffsetMax / 2;
+    sl->dstOffsetX = (info->width - sl->viewWidth) / 2;
+    sl->dstOffsetY = (info->height - sl->viewHeight) / 2;
 
-    if (sl->viewWidth > info->width)
-    {
-        sl->viewWidth = info->width;
-    }
+    addElementScrollingLayer(sl, display, update);
+}
 
-    if (sl->viewHeight > info->height)
-    {
-        sl->viewHeight = info->height;
-    }
+//-------------------------------------------------------------------------
+void
+addElementScrollingLayerOffsetView(
+    SCROLLING_LAYER_T *sl,
+    DISPMANX_MODEINFO_T *info,
+    DISPMANX_DISPLAY_HANDLE_T display,
+    DISPMANX_UPDATE_HANDLE_T update,
+    int32_t src_x_offset, int32_t src_y_offset,
+    int32_t src_x_max,    int32_t src_y_max,
+    int32_t dst_x_offset, int32_t dst_y_offset,
+    int32_t dst_width,    int32_t dst_height)
+{
+    sl->xOffsetMax = src_x_max;
+    sl->xOffset = src_x_offset;
 
-    vc_dispmanx_rect_set(&sl->srcRect,
-                         sl->xOffset << 16,
-                         sl->yOffset << 16,
-                         sl->viewWidth << 16,
-                         sl->viewHeight << 16);
+    sl->yOffsetMax = src_y_max;
+    sl->yOffset = src_y_offset;
 
-    vc_dispmanx_rect_set(&(sl->dstRect),
-                         (info->width - sl->viewWidth) / 2,
-                         (info->height - sl->viewHeight) / 2,
-                         sl->viewWidth,
-                         sl->viewHeight);
+    sl->viewWidth  = dst_width;
+    sl->viewHeight = dst_height;
+
+    sl->dstOffsetX = dst_x_offset;
+    sl->dstOffsetY = dst_y_offset;
+
+    if (sl->viewWidth > info->width) sl->viewWidth = info->width;
+    if (sl->viewHeight > info->height) sl->viewHeight = info->height;
 
     addElementScrollingLayer(sl, display, update);
 }
@@ -169,12 +163,21 @@ addElementScrollingLayer(
     DISPMANX_DISPLAY_HANDLE_T display,
     DISPMANX_UPDATE_HANDLE_T update)
 {
-    VC_DISPMANX_ALPHA_T alpha =
-    {
-        DISPMANX_FLAGS_ALPHA_FROM_SOURCE, 
-        255,
-        0
-    };
+    int result = vc_dispmanx_rect_set(&sl->srcRect,
+                         sl->xOffset << 16,
+                         sl->yOffset << 16,
+                         sl->viewWidth << 16,
+                         sl->viewHeight << 16);
+    assert(result == 0);
+
+    result = vc_dispmanx_rect_set(&(sl->dstRect),
+                         sl->dstOffsetX,
+                         sl->dstOffsetY,
+                         sl->viewWidth,
+                         sl->viewHeight);
+    assert(result == 0);
+
+    VC_DISPMANX_ALPHA_T alpha = { DISPMANX_FLAGS_ALPHA_FROM_SOURCE, 255, 0 };
 
     sl->element = vc_dispmanx_element_add(update,
                                           display,
@@ -194,86 +197,94 @@ addElementScrollingLayer(
 void
 setDirectionScrollingLayer(
     SCROLLING_LAYER_T *sl,
-    char c)
+    int16_t x_step, int16_t y_step)
 {
-    switch (tolower(c))
-    {
-    case ',':
-    case '<':
-
-        --(sl->direction);
-        if (sl->direction < 0)
-        {
-            sl->direction = sl->directionMax;
-        }
-
-        break;
-
-    case '.':
-    case '>':
-
-        ++(sl->direction);
-
-        if (sl->direction > sl->directionMax)
-        {
-            sl->direction = 0;
-        }
-
-        break;
-
-    default:
-
-        // do nothing
-
-        break;
-    }
+    sl->xStepper = x_step;
+    sl->yStepper = y_step;
 }
 
 //-------------------------------------------------------------------------
 
 void
-updatePositionScrollingLayer(
+setScrollingLayer(
+    SCROLLING_LAYER_T *sl)
+{
+    sl->xOffset += sl->xStepper;
+
+    if (sl->xOffset < 0) {
+        sl->xOffset = sl->xOffsetMax + sl->xOffset;
+    } else if (sl->xOffset > sl->xOffsetMax) {
+        sl->xOffset = sl->xOffset - sl->xOffsetMax;
+    }
+
+    sl->yOffset += sl->yStepper;
+
+    if (sl->yOffset < 0) {
+        sl->yOffset = sl->yOffsetMax + sl->yOffset;
+    } else if (sl->yOffset > sl->yOffsetMax) {
+        sl->yOffset = sl->yOffset - sl->yOffsetMax;
+    }
+    sl->scroll_step_flag = 1;
+}
+
+//-------------------------------------------------------------------------
+
+void writeFlagScrollingLayer(
+    SCROLLING_LAYER_T *sl)
+{
+    int result = vc_dispmanx_rect_set(&(sl->fullRect),
+                         0,
+                         0,
+                         sl->image->width,
+                         sl->image->height);
+    assert(result == 0);
+
+    result = vc_dispmanx_resource_write_data(sl->frontResource,
+                                             sl->image->type,
+                                             sl->image->pitch,
+                                             sl->image->buffer,
+                                             &(sl->fullRect));
+    assert(result == 0);
+
+    result = vc_dispmanx_resource_write_data(sl->backResource,
+                                             sl->image->type,
+                                             sl->image->pitch,
+                                             sl->image->buffer,
+                                             &(sl->fullRect));
+    assert(result == 0);
+
+    if (sl->element != 0) {
+	DISPMANX_UPDATE_HANDLE_T update = vc_dispmanx_update_start(0);
+	assert(update != 0);
+	result = vc_dispmanx_element_modified(update, sl->element, &(sl->dstRect) );
+	assert(result == 0);
+	result = vc_dispmanx_update_submit_sync(update);
+	assert(result == 0);
+    }
+
+    sl->image_write_flag = 1;
+}
+
+//-------------------------------------------------------------------------
+
+void
+updateScrollingLayer(
     SCROLLING_LAYER_T *sl,
     DISPMANX_UPDATE_HANDLE_T update)
 {
-    int result = 0;
+    if (sl->image_write_flag == 0 && sl->scroll_step_flag == 0) return;
+    sl->image_write_flag = 0;
+    sl->scroll_step_flag = 0;
 
-    //---------------------------------------------------------------------
-
-    sl->xOffset += sl->xDirections[sl->direction];
-
-    if (sl->xOffset < 0)
-    {
-        sl->xOffset = sl->xOffsetMax;
-    }
-    else if (sl->xOffset > sl->xOffsetMax)
-    {
-        sl->xOffset = 0;
-    }
-
-    sl->yOffset -= sl->yDirections[sl->direction];
-
-    if (sl->yOffset < 0)
-    {
-        sl->yOffset = sl->yOffsetMax;
-    }
-    else if (sl->yOffset > sl->yOffsetMax)
-    {
-        sl->yOffset = 0;
-    }
-
-    //---------------------------------------------------------------------
-
-    result = vc_dispmanx_element_change_source(update,
-                                               sl->element,
-                                               sl->backResource);
+    int result = vc_dispmanx_element_change_source( update, sl->element, sl->backResource);
     assert(result == 0);
 
-    vc_dispmanx_rect_set(&(sl->srcRect),
+    result = vc_dispmanx_rect_set(&(sl->srcRect),
                          sl->xOffset << 16,
                          sl->yOffset << 16,
                          sl->viewWidth << 16,
                          sl->viewHeight << 16);
+    assert(result == 0);
 
     result = 
     vc_dispmanx_element_change_attributes(update,
@@ -318,63 +329,8 @@ destroyScrollingLayer(
 
     //---------------------------------------------------------------------
 
-    destroyImage(&(sl->image));
+    destroyImage(sl->image);
 }
 
 //-------------------------------------------------------------------------
-
-bool
-loadScrollingLayerPng(
-    IMAGE_T* image,
-    const char *file,
-    bool extendX,
-    bool extendY)
-{
-    IMAGE_T baseImage;
-    bool loaded = loadPng(&baseImage, file);
-
-    if (loaded)
-    {
-        int32_t width = (extendX) ? baseImage.width*2 : baseImage.width;
-        int32_t height = (extendY) ? baseImage.height*2 : baseImage.height;
-
-        initImage(image, baseImage.type, width, height, false);
-
-        if (extendX)
-        {
-            int32_t rowLength = (baseImage.width*baseImage.bitsPerPixel)/8;
-
-            int32_t baseOffset = 0;
-            int32_t offset = 0;
-
-            int32_t y = 0;
-            for (y = 0 ; y < baseImage.width ; y++)
-            {
-                baseOffset = y * baseImage.pitch;
-                offset = y * image->pitch;
-
-                memcpy(image->buffer + offset,
-                       baseImage.buffer + baseOffset,
-                       rowLength);
-
-                memcpy(image->buffer + offset + rowLength,
-                       baseImage.buffer + baseOffset,
-                       rowLength);
-            }
-        }
-        else
-        {
-            memcpy(image->buffer, baseImage.buffer, baseImage.size);
-        }
-
-        if (extendY)
-        {
-            int32_t size = image->pitch * baseImage.height;
-
-            memcpy(image->buffer + size, image->buffer, size);
-        }
-    }
-
-    return loaded;
-}
 

@@ -25,16 +25,25 @@
 //
 //-------------------------------------------------------------------------
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "image.h"
 
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
+
 //-------------------------------------------------------------------------
 
 #ifndef ALIGN_TO_16
 #define ALIGN_TO_16(x)  ((x + 15) & ~15)
+#endif
+
+#ifndef ALIGN_TO_32
+#define ALIGN_TO_32(x)  ((x + 31) & ~31)
 #endif
 
 //-------------------------------------------------------------------------
@@ -68,6 +77,8 @@ bool initImage(
     int32_t height,
     bool dither)
 {
+    assert(image != NULL);
+
     switch (type)
     {
     case VC_IMAGE_4BPP:
@@ -164,11 +175,12 @@ bool initImage(
     image->type = type;
     image->width = width;
     image->height = height;
-    image->pitch = (ALIGN_TO_16(width) * image->bitsPerPixel) / 8;
+    image->stride = width * image->bitsPerPixel / 8;
+    image->pitch = (ALIGN_TO_32(width) * image->bitsPerPixel) / 8;
     image->alignedHeight = ALIGN_TO_16(height);
     image->size = image->pitch * image->alignedHeight;
 
-    image->buffer = calloc(1, image->size);
+    image->buffer = calloc(2, image->size);
 
     if (image->buffer == NULL)
     {
@@ -188,7 +200,7 @@ clearImageIndexed(
 {
     if (image->setPixelIndexed != NULL)
     {
-	image->setPixelIndexed(image, 0, 0, image->height * image->width, index);
+	image->setPixelIndexed(image, 0, 0, image->height * ALIGN_TO_32(image->width), index);
     }
 }
 
@@ -201,7 +213,7 @@ clearImageRGB(
 {
     if (image->setPixelDirect != NULL)
     {
-	image->setPixelDirect(image, 0, 0, image->height * image->width, rgb);
+	image->setPixelDirect(image, 0, 0, image->height * ALIGN_TO_32(image->width), rgb);
     }
 }
 
@@ -355,10 +367,10 @@ destroyImage(
 //-------------------------------------------------------------------------
 
 void memfill(void *dest, size_t destsize, size_t elemsize) {
-        char    *nextdest = (char *) dest + elemsize;
-        size_t  movesize, donesize = elemsize;
+        void     *nextdest = (void *) dest + elemsize;
+        size_t   movesize, donesize = elemsize;
 
-        destsize -= elemsize;
+        //destsize -= elemsize;
         while (destsize) {
                 movesize = (donesize < destsize) ? donesize : destsize;
                 memcpy(nextdest, dest, movesize);
@@ -475,8 +487,11 @@ setPixelRGB565(
     uint16_t *value;  value = (uint16_t*) (image->buffer + (x * 2) + (y *image->pitch));
 
     *value = pixel;
-    if (num >= 2)
-	memfill( value, sizeof(uint16_t) * num, sizeof(uint16_t) );
+    if (num >= 2) {
+	int yy = (num - x) / image->width;
+	int extra = (image->pitch - image->stride) * yy;
+	memfill( value, (sizeof(uint16_t) * num) + extra, sizeof(uint16_t) );
+    }
 }
 
 //-----------------------------------------------------------------------
@@ -552,8 +567,11 @@ setPixelRGB888(
     line[0] = rgba->red;
     line[1] = rgba->green;
     line[2] = rgba->blue;
-    if (num >= 2)
-	memfill( line, sizeof(uint8_t) * 3 * num, sizeof(uint8_t) * 3 );
+    if (num >= 2) {
+	int yy = (num - x) / image->width;
+	int extra = (image->pitch - image->stride) * yy;
+	memfill( line, (sizeof(uint8_t) * 3 * num) + extra, sizeof(uint8_t) * 3 );
+    }
 }
 
 //-------------------------------------------------------------------------
@@ -606,8 +624,11 @@ setPixelRGBA16(
     uint16_t *value;  value = (uint16_t*) (image->buffer + (x * 2) + (y * image->pitch));
 
     *value = pixel;
-    if (num >= 2)
-	memfill( value, sizeof(uint16_t) * num, sizeof(uint16_t) );
+    if (num >= 2) {
+	int yy = (num - x) / image->width;
+	int extra = (image->pitch - image->stride) * yy;
+	memfill( value, (sizeof(uint16_t) * num) + extra, sizeof(uint16_t) );
+    }
 }
 
 //-----------------------------------------------------------------------
@@ -708,14 +729,17 @@ setPixelRGBA32(
     int32_t num,
     const RGBA8_T *rgba)
 {
-    uint8_t *line = (uint8_t *)(image->buffer) + (y*image->pitch) + (4*x);
+    uint8_t *line = (uint8_t *)(image->buffer) + (y * image->pitch) + (4 * x);
 
     line[0] = rgba->red;
     line[1] = rgba->green;
     line[2] = rgba->blue;
     line[3] = rgba->alpha;
-    if (num >= 2)
-	memfill( line, sizeof(uint8_t) * 4 * num, sizeof(uint8_t) * 4 );
+    if (num >= 2) {
+	int yy = (num - x) / image->width;
+	int extra = (image->pitch - image->stride) * yy;
+	memfill( line, (sizeof(uint8_t) * 4 * num) + extra, sizeof(uint8_t) * 4 );
+    }
 }
 
 //-----------------------------------------------------------------------
@@ -877,6 +901,141 @@ IMAGE_TYPE_INFO_T imageTypeInfo[] =
 
 static size_t imageTypeInfoEntries = sizeof(imageTypeInfo)/
                                      sizeof(imageTypeInfo[0]);
+
+//-----------------------------------------------------------------------
+
+void
+copyImageRGB(
+    IMAGE_T *src_image,
+    IMAGE_T *dst_image,
+    int32_t src_x, int32_t src_y,
+    int32_t src_w, int32_t src_h,
+    int32_t dst_x, int32_t dst_y)
+{
+    if (src_w + src_x > src_image->width)  src_w = src_image->width - src_x;
+    if (src_h + src_y > src_image->height) src_h = src_image->height - src_y;
+    int32_t dst_w = src_w;  if (dst_w + dst_x > dst_image->width)  dst_w = dst_image->width - dst_x;
+    int32_t dst_h = src_h;  if (dst_h + dst_y > dst_image->height) dst_h = dst_image->height - dst_y;
+    if (dst_w != src_w) src_w = dst_w;  if (dst_h != src_h) src_h = dst_h;
+    int32_t i, j, k;
+    int32_t stride = src_w * src_image->bitsPerPixel / 8;
+
+    if (src_image == dst_image) {
+	uint8_t *tmpbuf = calloc(src_h, stride);
+
+	for (i=0; i < src_h; i++) {
+	    j = i + src_y;
+	    memcpy( tmpbuf + (stride * i), src_image->buffer + (src_image->pitch * j) + src_x, stride );
+	}
+	for (i=0; i < dst_h; i++) {
+	    j = i + dst_y;
+	    memcpy( dst_image->buffer + (dst_image->pitch * j) + dst_x, tmpbuf + (stride * i), stride );
+	}
+	free( tmpbuf );
+    } else {
+	if (src_image->type == dst_image->type) {
+	    for (i=0; i < src_h; i++) {
+		j = i + src_y;
+		k = i + dst_y;
+		memcpy( dst_image->buffer + (dst_image->pitch * k) + dst_x,
+		    src_image->buffer + (src_image->pitch * j) + src_x, stride );
+	    }
+	} else {
+	    RGBA8_T  rgb;
+	    for (i=0; i < src_h; i++) {
+		int y1 = i + src_y;
+		int y2 = i + dst_y;
+		for (j=0; j < src_w; j++) {
+		    int x1 = j + src_x;
+		    int x2 = j + dst_x;
+		    getPixelRGB( src_image, x1, y1, &rgb );
+		    setPixelRGB( dst_image, x2, y2, 1, &rgb );
+		}
+	    }
+	}
+    }
+}
+
+//-----------------------------------------------------------------------
+
+void 
+expand_and_duplicate_Image(
+    IMAGE_T *image,
+    uint16_t x,
+    uint16_t y)
+{
+    int32_t old_x = image->width;
+    int32_t old_y = image->height;
+    int32_t old_z = image->stride;
+    int32_t old_p = image->pitch;
+    //int32_t old_s = image->size;
+    void   *old_buffer = image->buffer;
+    int   i;
+
+    image->width = old_x + x;
+    image->height = old_y + y;
+    image->stride = image->width * image->bitsPerPixel / 8;
+    image->pitch = (ALIGN_TO_32(image->width) * image->bitsPerPixel) / 8;
+    image->alignedHeight = ALIGN_TO_16(image->height);
+    image->size = image->pitch * image->alignedHeight;
+
+    image->buffer = calloc(2,image->size);
+
+    if (image->buffer == NULL)
+    {
+        fprintf(stderr, "image: memory exhausted\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (x>0) {
+	for( i=0; i < old_y; i++) {
+	    memcpy( image->buffer + (image->pitch * i)        , old_buffer + (old_p * i), old_z );
+	    memcpy( image->buffer + (image->pitch * i) + old_z, old_buffer + (old_p * i), old_z );
+	}
+    } else {
+	memcpy( image->buffer, old_buffer, (old_p * old_y) );
+    }
+    if (y>0) {
+	memcpy( image->buffer + (image->pitch * old_y), image->buffer, (image->pitch * y) );
+    }
+    free( old_buffer );
+}
+
+//-----------------------------------------------------------------------
+
+void
+swap_color_channels(
+    IMAGE_T *image,
+    uint8_t ch1,
+    uint8_t ch2)
+{
+    int32_t i, j;
+
+           if (image->type == VC_IMAGE_RGB565) {
+    } else if (image->type == VC_IMAGE_RGB888) {
+	if (ch1 > 3 || ch1 < 1 || ch2 > 3 || ch2 < 1) return;
+	for (i=0; i < image->height; i++) {
+	    for(j=0; j < image->width; j++) {
+		uint8_t *buffer = (uint8_t *) (image->buffer) + (i * image->pitch) + (3 * j);
+		uint8_t swap = buffer[ch1 - 1];
+		buffer[ch1 - 1] = buffer[ch2 - 1];
+		buffer[ch2 - 1] = swap;
+	    }
+	}
+    } else if (image->type == VC_IMAGE_RGBA16) {
+    } else if (image->type == VC_IMAGE_RGBA32) {
+	if (ch1 > 4 || ch1 < 1 || ch2 > 4 || ch2 < 1) return;
+	for (i=0; i < image->height; i++) {
+	    for(j=0; j < image->width; j++) {
+		uint8_t *buffer = (uint8_t *) (image->buffer) + (i * image->pitch) + (4 * j);
+		uint8_t swap = buffer[ch1 - 1];
+		buffer[ch1 - 1] = buffer[ch2 - 1];
+		buffer[ch2 - 1] = swap;
+	    }
+	}
+    }
+}
+
 
 //-----------------------------------------------------------------------
 

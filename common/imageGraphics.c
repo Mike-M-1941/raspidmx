@@ -25,10 +25,26 @@
 //
 //-------------------------------------------------------------------------
 
+#include <assert.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "image.h"
 #include "imageGraphics.h"
+
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
+
+//-------------------------------------------------------------------------
+
+#ifndef ALIGN_TO_16
+#define ALIGN_TO_16(x)  ((x + 15) & ~15)
+#endif
+
+#ifndef ALIGN_TO_32
+#define ALIGN_TO_32(x)  ((x + 31) & ~31)
+#endif
 
 //-------------------------------------------------------------------------
 
@@ -374,3 +390,111 @@ imageVerticalLineRGB(
     }
 }
 
+//-------------------------------------------------------------------------
+
+void
+imagePolygonFilledIndexed(
+    IMAGE_T *image,
+    POLYGON_T *poly,
+    int8_t index)
+{
+
+}
+
+//-------------------------------------------------------------------------
+
+void
+imagePolygonFilledRGB(
+    IMAGE_T *image,
+    POLYGON_T *poly,
+    const RGBA8_T *rgb)
+{
+    int  min_y =  9999999;
+    int  max_y = -9999999;
+    int  nodes, pixelY, i, j;
+    double nodeX[200];
+
+    for (i=0; i < poly->points; i++) {
+	if (poly->p[i].y > max_y) max_y = poly->p[i].y;
+	if (poly->p[i].y < min_y) min_y = poly->p[i].y;
+    }
+
+    //  Loop through the rows of the image.
+    for (pixelY=min_y; pixelY < max_y; pixelY++) {
+	double line_y = pixelY;
+	//  Build a list of nodes.
+	nodes = 0;
+	j = poly->points - 1;
+	for (i=0; i < poly->points; i++) {
+	    double px1 = poly->p[i].x;
+	    double py1 = poly->p[i].y;
+	    double px2 = poly->p[j].x;
+	    double py2 = poly->p[j].y;
+	    if ((py1 < line_y && py2 >= line_y) || (py2 < line_y && py1 >= line_y)) {
+		    nodeX[nodes++]= (px1 + (line_y - py1) / (py2 - py1) * (px2 - px1) );
+		    //printf( "line %d  %g \n", pixelY, nodeX[nodes - 1] );
+	    }
+	    j = i;
+	}
+
+	//  Sort the nodes, via a simple “Bubble” sort.
+	i = 0;
+	while (i < (nodes - 1)) {
+	    if (nodeX[i] > nodeX[i+1]) {
+		double swap = nodeX[i];
+		nodeX[i] = nodeX[i+1];
+		nodeX[i+1] = swap;
+		if (i) i--;
+	    } else {
+		i++;
+	    }
+	}
+
+	//  Fill the pixels between node pairs.
+	//   3.2	6.6
+	//   .8 4------6 .6
+	for (i=0; i < nodes; i+= 2) {
+	    RGBA8_T fp = *rgb;
+	    fp.alpha = (1.0 - (nodeX[i] - floor(nodeX[i]))) * 255.0;
+	    int32_t x0 = floor(nodeX[i]);
+	    int32_t x1 = ceil(nodeX[i]);
+
+	    RGBA8_T lp = *rgb;
+	    lp.alpha =  ((nodeX[i+1] - floor(nodeX[i+1]))) * 255.0;
+	    int32_t x2 = ceil(nodeX[i+1]);
+	    int32_t x9 = x2 + 1;
+
+	//    printf( "draw line YY %d   %g %g     x0 %d = %d  x1 %d -- x2 %d  x9 %d = %d\n",
+	//	pixelY, nodeX[i], nodeX[i+1], x0, fp.alpha, x1, x2, x9, lp.alpha );
+	    setPixelRGBA( image, x0, pixelY, 1, &fp );
+	    setPixelRGBA( image, x9, pixelY, 1, &lp );
+	    //setPixelRGBA( image, x0 + 10, pixelY, 1, rgb ); //&fp );
+	    //setPixelRGBA( image, x9 + 10, pixelY, 1, rgb ); //&lp );
+	    imageHorizontalLineRGB( image, x1, x2, pixelY, rgb );
+	}
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void
+setPolygonNodes( POLYGON_T *poly, int num, ...)
+{
+	assert(poly != NULL);
+	assert(num > 0);
+
+	va_list arguments;
+	va_start( arguments, num );
+
+	if (poly->p != NULL) free( poly->p );
+	poly->p = calloc(num, sizeof(POLYPOINT_T) );
+	poly->points = 0;
+
+	int i;
+	for (i=0; i < num; i++ ) {
+		poly->p[i].x = va_arg ( arguments, int );
+		poly->p[i].y = va_arg ( arguments, int );
+		poly->points++;
+	}
+	va_end ( arguments );
+}

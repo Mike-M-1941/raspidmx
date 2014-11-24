@@ -30,6 +30,10 @@
 
 #include "backgroundLayer.h"
 
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
+
 //-------------------------------------------------------------------------
 
 void

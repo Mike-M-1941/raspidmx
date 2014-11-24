@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
     initBackgroundLayer(&bg, background, 0);
 
     SPRITE_LAYER_T sprite;
-    initSpriteLayer(&sprite, columns, rows, file, 1);
+    initSpriteLayerPNG(&sprite, columns, rows, file, 1);
 
     //---------------------------------------------------------------------
 
@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
 
     //---------------------------------------------------------------------
 
-    DISPMANX_UPDATE_HANDLE_T update = vc_dispmanx_update_start(0);
+    DISPMANX_UPDATE_HANDLE_T update = vc_dispmanx_update_start(5);
     assert(update != 0);
 
     addElementBackgroundLayer(&bg, display, update);
@@ -184,7 +184,10 @@ int main(int argc, char *argv[])
             DISPMANX_UPDATE_HANDLE_T update = vc_dispmanx_update_start(0);
             assert(update != 0);
 
-            updatePositionSpriteLayer(&sprite, update);
+	    //incrementCurrentSprite( &sprite );
+            //updatePositionSpriteLayer(&sprite, update);
+	    setCurrentSpriteINC( &sprite );
+	    updateSpriteLayer( &sprite, update );
 
             result = vc_dispmanx_update_submit_sync(update);
             assert(result == 0);

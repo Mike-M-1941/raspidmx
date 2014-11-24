@@ -53,13 +53,36 @@ int main(void)
 {
     bcm_host_init();
 
+    int direction = 0;
+    int directionMax = 7;
+    int xDirections[8];
+    int yDirections[8];
+
+    xDirections[0] = 0;
+    xDirections[1] = 1;
+    xDirections[2] = 1;
+    xDirections[3] = 1;
+    xDirections[4] = 0;
+    xDirections[5] = -1;
+    xDirections[6] = -1;
+    xDirections[7] = -1;
+
+    yDirections[0] = 1;
+    yDirections[1] = 1;
+    yDirections[2] = 0;
+    yDirections[3] = -1;
+    yDirections[4] = -1;
+    yDirections[5] = -1;
+    yDirections[6] = 0;
+    yDirections[7] = 1;
+
     //---------------------------------------------------------------------
 
     BACKGROUND_LAYER_T bg;
     initBackgroundLayer(&bg, 0x000F, 0);
 
     SCROLLING_LAYER_T sl;
-    initScrollingLayer(&sl, "texture.png", 1);
+    initScrollingLayerPNG(&sl, "texture_2.png", 1);
 
     IMAGE_LAYER_T spotlight;
 
@@ -72,7 +95,7 @@ int main(void)
     createResourceImageLayer(&spotlight, 2);
 
     SPRITE_LAYER_T sprite;
-    initSpriteLayer(&sprite, 12, 1, "sprite.png", 3);
+    initSpriteLayerPNG(&sprite, 12, 1, "sprite.png", 3);
 
     //---------------------------------------------------------------------
 
@@ -107,7 +130,40 @@ int main(void)
         if (keyPressed(&c))
         {
             c = tolower(c);
-            setDirectionScrollingLayer(&sl, c);
+	    switch (tolower(c))
+	    {
+	    case ',':
+	    case '<':
+
+	        --(direction);
+	        if (direction < 0)
+	        {
+	            direction = directionMax;
+	        }
+
+	        break;
+
+	    case '.':
+	    case '>':
+
+	        ++(direction);
+	
+	        if (direction > directionMax)
+	        {
+	            direction = 0;
+	        }
+	
+	        break;
+
+	    default:
+
+	        // do nothing
+
+	        break;
+	    }
+
+            //setDirectionScrollingLayer(&sl, c);
+	    setDirectionScrollingLayer( &sl, xDirections[direction], yDirections[direction] );
         }
 
         //-----------------------------------------------------------------
@@ -115,8 +171,11 @@ int main(void)
         DISPMANX_UPDATE_HANDLE_T update = vc_dispmanx_update_start(0);
         assert(update != 0);
 
-        updatePositionScrollingLayer(&sl, update);
-        updatePositionSpriteLayer(&sprite, update);
+	setScrollingLayer( &sl );
+        updateScrollingLayer( &sl, update );
+
+	setCurrentSpriteINC( &sprite );
+        updateSpriteLayer( &sprite, update );
 
         result = vc_dispmanx_update_submit_sync(update);
         assert(result == 0);

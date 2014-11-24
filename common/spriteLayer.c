@@ -33,77 +33,83 @@
 #include "loadpng.h"
 #include "spriteLayer.h"
 
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
+
 //-------------------------------------------------------------------------
 
-void initSpriteLayer(
+void initSpriteLayerPNG(
     SPRITE_LAYER_T *s,
-    int columns,
-    int rows,
+    int32_t columns,
+    int32_t rows,
     const char *file,
     int32_t layer)
 {
-    int result = 0;
+    s->image = calloc(2, sizeof(IMAGE_T) );
 
-    bool loaded = loadPng(&(s->image), file);
+    bool loaded = loadPng( s->image, file);
 
     if (loaded == false)
     {
         fprintf(stderr, "sprite: unable to load %s\n", file);
         exit(EXIT_FAILURE);
     }
+    initSpriteLayerImage(s,columns,rows,NULL,layer);
+}
+
+void initSpriteLayerImage(
+    SPRITE_LAYER_T *s,
+    int32_t columns,
+    int32_t rows,
+    IMAGE_T *image,
+    int32_t layer)
+{
+    if (image != NULL) s->image = image;
+    assert(s->image != NULL);
 
     s->columns = columns;
     s->rows = rows;
-    s->width = s->image.width / s->columns;
-    s->height = s->image.height / s->rows;
-    s->xOffsetMax = (s->columns - 1) * s->width;
+    s->cur_column = 0;
+    s->cur_row = 0;
+    s->spriteWidth = s->image->width / s->columns;
+    s->spriteHeight = s->image->height / s->rows;
+    s->xOffsetMax = s->columns * s->spriteWidth;
     s->xOffset = 0;
-    s->yOffsetMax = (s->rows - 1) * s->height;
+    s->yOffsetMax = s->rows * s->spriteHeight;
     s->yOffset = 0;
+    s->dstOffsetX = 0;
+    s->dstOffsetY = 0;
+    s->image_write_flag = 1;
+    s->change_sprite_flag = 1;
+    s->element = 0;
 
     //---------------------------------------------------------------------
 
-    uint32_t vc_image_ptr;
+    uint32_t vc_image_ptr = 1;
 
     s->layer = layer;
 
     s->frontResource =
         vc_dispmanx_resource_create(
-            s->image.type,
-            s->image.width | (s->image.pitch << 16),
-            s->image.height | (s->image.alignedHeight << 16),
+            s->image->type,
+            s->image->width | (s->image->pitch << 16),
+            s->image->height | (s->image->alignedHeight << 16),
             &vc_image_ptr);
     assert(s->frontResource != 0);
 
     s->backResource =
         vc_dispmanx_resource_create(
-            s->image.type,
-            s->image.width | (s->image.pitch << 16),
-            s->image.height | (s->image.alignedHeight << 16),
+            s->image->type,
+            s->image->width | (s->image->pitch << 16),
+            s->image->height | (s->image->alignedHeight << 16),
             &vc_image_ptr);
     assert(s->backResource != 0);
 
-    //---------------------------------------------------------------------
-
-    vc_dispmanx_rect_set(&(s->dstRect),
-                         0,
-                         0,
-                         s->image.width,
-                         s->image.height);
-
-    result = vc_dispmanx_resource_write_data(s->frontResource,
-                                             s->image.type,
-                                             s->image.pitch,
-                                             s->image.buffer,
-                                             &(s->dstRect));
+    int result = vc_dispmanx_rect_set( &(s->fullRect), 0, 0, s->image->width, s->image->height );
     assert(result == 0);
 
-    result = vc_dispmanx_resource_write_data(s->backResource,
-                                             s->image.type,
-                                             s->image.pitch,
-                                             s->image.buffer,
-                                             &(s->dstRect));
-    assert(result == 0);
+    writeFlagSpriteLayer( s );
 }
 
 //-------------------------------------------------------------------------
@@ -115,17 +121,23 @@ addElementSpriteLayerCentered(
     DISPMANX_DISPLAY_HANDLE_T display,
     DISPMANX_UPDATE_HANDLE_T update)
 {
-    vc_dispmanx_rect_set(&(s->srcRect),
-                         s->xOffset << 16,
-                         s->yOffset << 16,
-                         s->width << 16,
-                         s->height << 16);
+    s->dstOffsetX = (info->width - s->spriteWidth) / 2;
+    s->dstOffsetY = (info->height - s->spriteHeight) / 2;
 
-    vc_dispmanx_rect_set(&(s->dstRect),
-                         (info->width - s->width) / 2,
-                         (info->height - s->height) / 2,
-                         s->width,
-                         s->height);
+    addElementSpriteLayer(s, display, update);
+}
+
+//-------------------------------------------------------------------------
+void
+addElementSpriteLayerOffset(
+    SPRITE_LAYER_T *s,
+    DISPMANX_MODEINFO_T *info,
+    DISPMANX_DISPLAY_HANDLE_T display,
+    DISPMANX_UPDATE_HANDLE_T update,
+    int16_t xOffset, int16_t yOffset)
+{
+    s->dstOffsetX = xOffset;
+    s->dstOffsetY = yOffset;
 
     addElementSpriteLayer(s, display, update);
 }
@@ -138,6 +150,11 @@ addElementSpriteLayer(
     DISPMANX_DISPLAY_HANDLE_T display,
     DISPMANX_UPDATE_HANDLE_T update)
 {
+    int result = vc_dispmanx_rect_set( &(s->srcRect), s->xOffset << 16, s->yOffset << 16, s->spriteWidth << 16, s->spriteHeight << 16 );
+    assert(result == 0);
+    result = vc_dispmanx_rect_set( &(s->dstRect), s->dstOffsetX, s->dstOffsetY, s->spriteWidth, s->spriteHeight );
+    assert(result == 0);
+
     VC_DISPMANX_ALPHA_T alpha =
     {
         DISPMANX_FLAGS_ALPHA_FROM_SOURCE, 
@@ -164,48 +181,138 @@ addElementSpriteLayer(
 //-------------------------------------------------------------------------
 
 void
-updatePositionSpriteLayer(
+setCurrentSpriteXY(
+    SPRITE_LAYER_T *s,
+    int32_t cur_column,
+    int32_t cur_row)
+{
+    int32_t old_row = s->cur_row;
+    int32_t old_col = s->cur_column;
+
+    if (cur_column >= s->columns) { cur_column = s->columns - 1; }
+    if (cur_row >= s->rows)       { cur_row = s->rows - 1; }
+
+    s->cur_column = cur_column;
+    s->cur_row = cur_row;
+
+    if (s->cur_row != old_row || s->cur_column != old_col) s->change_sprite_flag = 1;
+}
+
+
+//-------------------------------------------------------------------------
+
+void
+setCurrentSpriteINC(
+    SPRITE_LAYER_T *s)
+{
+    if (s->columns == 1 && s->rows > 1) {
+	s->cur_row++;
+	if (s->cur_row >= s->rows) s->cur_row = 0;
+    } else if (s->columns > 1 && s->rows == 1) {
+	s->cur_column++;
+	if (s->cur_column >= s->columns) s->cur_column = 0;
+    } else if (s->columns > 1 && s->rows > 1) {
+	s->cur_column++;
+	if (s->cur_column >= s->columns) {
+	    s->cur_column = 0;
+	    s->cur_row++;
+	    if (s->cur_row >= s->rows) s->cur_row = 0;
+	}
+    }
+    s->change_sprite_flag = 1;
+}
+
+void
+setCurrentSpriteNUM(
+    SPRITE_LAYER_T *s,
+    int32_t sprite_num)
+{
+    int32_t old_row = s->cur_row;
+    int32_t old_col = s->cur_column;
+    s->cur_row = 0;
+    s->cur_column = 0;
+
+    if (s->columns == 1 && s->rows > 1) {
+	s->cur_row = sprite_num % s->rows;
+    } else if (s->columns > 1 && s->rows == 1) {
+	s->cur_column = sprite_num % s->columns;
+    } else if (s->columns > 1 && s->rows > 1) {
+	s->cur_row = sprite_num / s->columns;
+	s->cur_column = sprite_num % s->columns;
+    }
+    if (s->cur_row != old_row || s->cur_column != old_col) s->change_sprite_flag = 1;
+}
+
+
+// indicate that we updated the image buffer so we
+// need to push out those changes on the next screen update.
+// This does not include switching sprite frames but rather the
+// underlying image data for the sprite.
+void writeFlagSpriteLayer(
+    SPRITE_LAYER_T *s)
+{
+    int result = vc_dispmanx_resource_write_data( s->backResource, s->image->type, s->image->pitch, s->image->buffer, &(s->fullRect) );
+    assert(result == 0);
+
+    result = vc_dispmanx_resource_write_data( s->frontResource, s->image->type, s->image->pitch, s->image->buffer, &(s->fullRect) );
+    assert(result == 0);
+
+    if (s->element != 0) {
+	DISPMANX_UPDATE_HANDLE_T update = vc_dispmanx_update_start(0);
+	assert(update != 0);
+	result = vc_dispmanx_element_modified(update, s->element, &(s->dstRect) );
+	assert(result == 0);
+	result = vc_dispmanx_update_submit_sync(update);
+	assert(result == 0);
+    }
+
+    s->image_write_flag = 1;
+}
+
+/*    result = vc_dispmanx_rect_set(&(s->fullRect),
+                         0,
+                         0,
+                         s->image->width,
+                         s->image->height);
+    assert(result == 0);
+
+    result = vc_dispmanx_resource_write_data(s->frontResource,
+                                             s->image->type,
+                                             s->image->pitch,
+                                             s->image->buffer,
+                                             &(s->fullRect));
+    assert(result == 0);
+    result = vc_dispmanx_resource_write_data(s->backResource,
+                                             s->image->type,
+                                             s->image->pitch,
+                                             s->image->buffer,
+                                             &(s->fullRect));
+    assert(result == 0);
+*/
+
+void
+updateSpriteLayer(
     SPRITE_LAYER_T *s,
     DISPMANX_UPDATE_HANDLE_T update)
 {
     int result = 0;
 
-    //---------------------------------------------------------------------
+    if (s->image_write_flag == 0 && s->change_sprite_flag == 0) return;
+    s->image_write_flag = 0;
+    s->change_sprite_flag = 0;
 
-    s->xOffset += s->width;
-
-    if (s->xOffset > s->xOffsetMax)
-    {
-        s->xOffset = 0;
-        s->yOffset += s->height;
-
-        if (s->yOffset > s->yOffsetMax)
-        {
-            s->yOffset = 0;
-        }
-    }
-
-    //---------------------------------------------------------------------
-
-    vc_dispmanx_rect_set(&(s->srcRect),
-                         s->xOffset << 16,
-                         s->yOffset << 16,
-                         s->width << 16,
-                         s->height << 16);
-
-    result = 
-    vc_dispmanx_element_change_attributes(update,
-                                          s->element,
-                                          ELEMENT_CHANGE_SRC_RECT,
-                                          0,
-                                          255,
-                                          &(s->dstRect),
-                                          &(s->srcRect),
-                                          0,
-                                          DISPMANX_NO_ROTATE);
+    result = vc_dispmanx_element_change_source( update, s->element, s->backResource );
     assert(result == 0);
 
-    //---------------------------------------------------------------------
+    s->xOffset = s->cur_column * s->spriteWidth;
+    s->yOffset = s->cur_row * s->spriteHeight;
+
+    result = vc_dispmanx_rect_set( &(s->srcRect), s->xOffset << 16, s->yOffset << 16, s->spriteWidth << 16, s->spriteHeight << 16);
+    assert(result == 0);
+
+    result = vc_dispmanx_element_change_attributes( update, s->element, ELEMENT_CHANGE_SRC_RECT,
+		0, 255, &(s->dstRect), &(s->srcRect), 0, DISPMANX_NO_ROTATE);
+    assert(result == 0);
 
     DISPMANX_RESOURCE_HANDLE_T tmp = s->frontResource;
     s->frontResource = s->backResource;
@@ -236,6 +343,6 @@ destroySpriteLayer(
 
     //---------------------------------------------------------------------
 
-    destroyImage(&(s->image));
+    destroyImage(s->image);
 }
 

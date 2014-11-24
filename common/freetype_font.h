@@ -66,13 +66,13 @@ draw_FT_CharRGB(
     const RGBA8_T *rgb,
     IMAGE_T *image);
 
-int measure_FT_String( const char *string, uint8_t font, uint16_t size);
+int measure_FT_String( char *string, uint8_t font, uint16_t size);
 
 void
 draw_FT_StringIndexed(
     int x,
     int y,
-    const char *string,
+    char *string,
     uint8_t font,
     uint16_t size,
     int8_t index,
@@ -82,7 +82,7 @@ void
 draw_FT_StringRGB(
     int x,
     int y,
-    const char *string,
+    char *string,
     uint8_t font,
     uint16_t size,
     const RGBA8_T *rgb,

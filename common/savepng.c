@@ -29,6 +29,7 @@
 
 #include <png.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -166,6 +167,8 @@ pngWriteImageRGBA32(
 
 bool savePng(const IMAGE_T* image, const char *file)
 {
+    assert(image != NULL);
+
     png_structp pngPtr = png_create_write_struct(PNG_LIBPNG_VER_STRING,
                                                  NULL,
                                                  NULL,

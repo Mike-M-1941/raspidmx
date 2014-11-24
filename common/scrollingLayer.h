@@ -38,19 +38,22 @@
 
 typedef struct
 {
-    IMAGE_T image;
+    IMAGE_T *image;
+    uint8_t image_write_flag;
+    uint8_t scroll_step_flag;
     int32_t viewWidth;
     int32_t viewHeight;
     int32_t xOffsetMax;
     int32_t xOffset;
     int32_t yOffsetMax;
     int32_t yOffset;
-    int16_t direction;
-    int16_t directionMax;
-    int32_t xDirections[8];
-    int32_t yDirections[8];
+    int32_t dstOffsetX;
+    int32_t dstOffsetY;
+    int16_t xStepper;
+    int16_t yStepper;
     VC_RECT_T srcRect;
     VC_RECT_T dstRect;
+    VC_RECT_T fullRect;
     int32_t layer;
     DISPMANX_RESOURCE_HANDLE_T frontResource;
     DISPMANX_RESOURCE_HANDLE_T backResource;
@@ -60,9 +63,18 @@ typedef struct
 //-------------------------------------------------------------------------
 
 void
-initScrollingLayer(SCROLLING_LAYER_T *sl,
+initScrollingLayerPNG(SCROLLING_LAYER_T *sl,
     const char* file,
     int32_t layer);
+
+void
+initScrollingLayerImage(SCROLLING_LAYER_T *sl,
+    IMAGE_T *image,
+    int32_t max_x,
+    int32_t max_y,
+    int32_t layer);
+
+//-------------------------------------------------------------------------
 
 void
 addElementScrollingLayerCentered(
@@ -72,26 +84,43 @@ addElementScrollingLayerCentered(
     DISPMANX_UPDATE_HANDLE_T update);
 
 void
+addElementScrollingLayerOffsetView(
+    SCROLLING_LAYER_T *sl,
+    DISPMANX_MODEINFO_T *info,
+    DISPMANX_DISPLAY_HANDLE_T display,
+    DISPMANX_UPDATE_HANDLE_T update,
+    int32_t src_x_offset, int32_t src_y_offset,
+    int32_t src_x_max,    int32_t src_y_max,
+    int32_t dst_x_offset, int32_t dst_y_offset,
+    int32_t dst_width,    int32_t dst_height);
+
+void
 addElementScrollingLayer(
     SCROLLING_LAYER_T *sl,
     DISPMANX_DISPLAY_HANDLE_T display,
     DISPMANX_UPDATE_HANDLE_T update);
 
-void setDirectionScrollingLayer(SCROLLING_LAYER_T *sl, char c);
+//-------------------------------------------------------------------------
+
+void setDirectionScrollingLayer(
+    SCROLLING_LAYER_T *sl,
+    int16_t x_step,
+    int16_t y_step);
+
+void setScrollingLayer(
+    SCROLLING_LAYER_T *sl);
+
+//-------------------------------------------------------------------------
+
+void writeFlagScrollingLayer(
+    SCROLLING_LAYER_T *sl);
 
 void
-updatePositionScrollingLayer(
+updateScrollingLayer(
     SCROLLING_LAYER_T *sl,
     DISPMANX_UPDATE_HANDLE_T update);
 
 void destroyScrollingLayer(SCROLLING_LAYER_T *sl);
-
-bool
-loadScrollingLayerPng(
-    IMAGE_T* image,
-    const char *file,
-    bool extendX,
-    bool extendY);
 
 //-------------------------------------------------------------------------
 

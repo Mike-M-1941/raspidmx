@@ -55,7 +55,8 @@ struct IMAGE_T_
     VC_IMAGE_TYPE_T type;
     int32_t width;
     int32_t height;
-    int32_t pitch;
+    int32_t stride;	// byte row length without padding
+    int32_t pitch;	// includes extra padding
     int32_t alignedHeight;
     uint16_t bitsPerPixel;
     uint32_t size;
@@ -156,6 +157,28 @@ getPixelRGB(
 void
 destroyImage(
     IMAGE_T *image);
+
+//-------------------------------------------------------------------------
+
+void
+copyImageRGB(
+    IMAGE_T *src_image,
+    IMAGE_T *dst_image,
+    int32_t src_x, int32_t src_y,
+    int32_t src_w, int32_t src_h,
+    int32_t dst_x, int32_t dst_y);
+
+void
+expand_and_duplicate_Image(
+    IMAGE_T *image,
+    uint16_t x,
+    uint16_t y);
+
+void
+swap_color_channels(
+    IMAGE_T *image,
+    uint8_t ch1,
+    uint8_t ch2);
 
 //-------------------------------------------------------------------------
 

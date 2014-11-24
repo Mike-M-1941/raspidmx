@@ -1,0 +1,30 @@
+OBJS=scroll_test.o	../common/backgroundLayer.o	\
+			../common/imageLayer.o		\
+			../common/image.o		\
+			../common/key.o			\
+			../common/imageGraphics.o	\
+			../common/loadpng.o		\
+			../common/scrollingLayer.o
+
+BIN=scroll_test
+
+CFLAGS+=-Wall -g -O3 -I../common
+LDFLAGS+=-L/opt/vc/lib/ -lbcm_host -lm
+
+CFLAGS+=$(shell libpng-config --cflags)
+LDFLAGS+=$(shell libpng-config --ldflags)
+
+INCLUDES+=-I/opt/vc/include/ -I/opt/vc/include/interface/vcos/pthreads -I/opt/vc/include/interface/vmcs_host/linux
+
+all: $(BIN)
+
+%.o: %.c
+	@rm -f $@ 
+	$(CC) $(CFLAGS) $(INCLUDES) -g -c $< -o $@ -Wno-deprecated-declarations
+
+$(BIN): $(OBJS)
+	$(CC) -o $@ -Wl,--whole-archive $(OBJS) $(LDFLAGS) -Wl,--no-whole-archive -rdynamic
+
+clean:
+	@rm -f $(OBJS)
+	@rm -f $(BIN)

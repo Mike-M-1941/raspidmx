@@ -1,0 +1,55 @@
+1414377938: 34: Dmalloc version '5.5.2' from 'http://dmalloc.com/'
+1414377938: 34: flags = 0x4f48503, logfile 'logfile'
+1414377938: 34: interval = 50, addr = 0, seen # = 0, limit = 0
+1414377938: 34: threads enabled, lock-on = 0, lock-init = 2
+1414377938: 34: starting time = 1414377934
+1414377938: 34: process pid = 4016
+1414377938: 34: Dumping Chunk Statistics:
+1414377938: 34: basic-block 4096 bytes, alignment 8 bytes
+1414377938: 34: heap address range: 0xb49ee000 to 0xb6f0b000, 38916096 bytes
+1414377938: 34:     user blocks: 478 blocks, 1924596 bytes (96%)
+1414377938: 34:    admin blocks: 8 blocks, 32768 bytes (1%)
+1414377938: 34:    total blocks: 486 blocks, 1990656 bytes
+1414377938: 34: heap checked 1
+1414377938: 34: alloc calls: malloc 18, calloc 6, realloc 0, free 10
+1414377938: 34: alloc calls: recalloc 0, memalign 0, posix_memalign 0, valloc 0
+1414377938: 34: alloc calls: new 0, delete 0
+1414377938: 34:   current memory in use: 33524 bytes (14 pnts)
+1414377938: 34:  total memory allocated: 1895341 bytes (24 pnts)
+1414377938: 34:  max in use at one time: 1895341 bytes (24 pnts)
+1414377938: 34: max alloced with 1 call: 1806336 bytes
+1414377938: 34: max unused memory space: 47443 bytes (2%)
+1414377938: 34: top 10 allocations:
+1414377938: 34:  total-size  count in-use-size  count  source
+1414377938: 34:     1806336      1           0      0  ../common/image.c:183
+1414377938: 34:       52085      5           0      0  ra=0xb6e32374
+1414377938: 34:       32768      8       32768      8  ra=0xb6c0b200
+1414377938: 34:        1764      1           0      0  ../common/loadpng.c:160
+1414377938: 34:        1272      2           0      0  ra=0xb6e32230
+1414377938: 34:         544      4         544      4  ra=0xb6efe7f4
+1414377938: 34:         360      1           0      0  ra=0xb6cbfea0
+1414377938: 34:         112      1         112      1  ../common/spriteLayer.c:49
+1414377938: 34:         100      1         100      1  ra=0xb6c541c4
+1414377938: 34:     1895341     24       33524     14  Total of 9
+1414377938: 34: Dumping Not-Freed Pointers Changed Since Start:
+1414377938: 34:  not freed: '0xb4bbc008|s1' (4096 bytes) from 'ra=0xb6c0b200'
+1414377938: 34:  not freed: '0xb4bbf008|s1' (4096 bytes) from 'ra=0xb6c0b200'
+1414377938: 34:  not freed: '0xb4bc1008|s1' (4096 bytes) from 'ra=0xb6c0b200'
+1414377938: 34:  not freed: '0xb6ed2008|s1' (4096 bytes) from 'ra=0xb6c0b200'
+1414377938: 34:  not freed: '0xb6ed4008|s1' (4096 bytes) from 'ra=0xb6c0b200'
+1414377938: 34:  not freed: '0xb6ed6008|s1' (4096 bytes) from 'ra=0xb6c0b200'
+1414377938: 34:  not freed: '0xb6ed8008|s1' (4096 bytes) from 'ra=0xb6c0b200'
+1414377938: 34:  not freed: '0xb6eda008|s1' (4096 bytes) from 'ra=0xb6c0b200'
+1414377938: 34:  not freed: '0xb6edcf08|s1' (112 bytes) from '../common/spriteLayer.c:49'
+1414377938: 34:  not freed: '0xb6edcf88|s1' (100 bytes) from 'ra=0xb6c541c4'
+1414377938: 34:  not freed: '0xb6f0ac08|s1' (136 bytes) from 'ra=0xb6efe7f4'
+1414377938: 34:  not freed: '0xb6f0ad08|s1' (136 bytes) from 'ra=0xb6efe7f4'
+1414377938: 34:  not freed: '0xb6f0ae08|s1' (136 bytes) from 'ra=0xb6efe7f4'
+1414377938: 34:  not freed: '0xb6f0af08|s1' (136 bytes) from 'ra=0xb6efe7f4'
+1414377938: 34:  total-size  count  source
+1414377938: 34:       32768      8  ra=0xb6c0b200
+1414377938: 34:         544      4  ra=0xb6efe7f4
+1414377938: 34:         112      1  ../common/spriteLayer.c:49
+1414377938: 34:         100      1  ra=0xb6c541c4
+1414377938: 34:       33524     14  Total of 4
+1414377938: 34: ending time = 1414377938, elapsed since start = 0:00:04

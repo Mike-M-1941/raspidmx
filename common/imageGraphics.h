@@ -32,6 +32,20 @@
 
 //-------------------------------------------------------------------------
 
+typedef struct
+{
+	int32_t x;
+	int32_t y;
+} POLYPOINT_T;
+
+typedef struct
+{
+	int32_t points;
+	POLYPOINT_T *p;
+} POLYGON_T;
+
+//-------------------------------------------------------------------------
+
 void
 imageBoxIndexed(
     IMAGE_T *image,
@@ -49,6 +63,8 @@ imageBoxRGB(
     int32_t x2,
     int32_t y2,
     const RGBA8_T *rgb);
+
+//-------------------------------------------------------------------------
 
 void
 imageBoxFilledIndexed(
@@ -68,6 +84,8 @@ imageBoxFilledRGB(
     int32_t y2,
     const RGBA8_T *rgb);
 
+//-------------------------------------------------------------------------
+
 void
 imageLineIndexed(
     IMAGE_T *image,
@@ -86,6 +104,8 @@ imageLineRGB(
     int32_t y2,
     const RGBA8_T *rgb);
 
+//-------------------------------------------------------------------------
+
 void
 imageHorizontalLineIndexed(
     IMAGE_T *image,
@@ -102,6 +122,8 @@ imageHorizontalLineRGB(
     int32_t y,
     const RGBA8_T *rgb);
 
+//-------------------------------------------------------------------------
+
 void
 imageVerticalLineIndexed(
     IMAGE_T *image,
@@ -117,6 +139,23 @@ imageVerticalLineRGB(
     int32_t y1,
     int32_t y2,
     const RGBA8_T *rgb);
+
+//-------------------------------------------------------------------------
+
+void
+imagePolygonFilledIndexed(
+    IMAGE_T *image,
+    POLYGON_T *poly,
+    int8_t index);
+
+void
+imagePolygonFilledRGB(
+    IMAGE_T *image,
+    POLYGON_T *poly,
+    const RGBA8_T *rgb);
+
+void
+setPolygonNodes( POLYGON_T *poly, int num, ...);
 
 //-------------------------------------------------------------------------
 

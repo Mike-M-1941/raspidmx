@@ -37,8 +37,10 @@
 typedef struct
 {
     IMAGE_T image;
+    uint8_t image_write_flag;
     VC_RECT_T srcRect;
     VC_RECT_T dstRect;
+    VC_RECT_T fullRect;
     int32_t layer;
     DISPMANX_RESOURCE_HANDLE_T resource;
     DISPMANX_ELEMENT_HANDLE_T element;
@@ -57,6 +59,9 @@ void
 createResourceImageLayer(
     IMAGE_LAYER_T *il,
     int32_t layer);
+
+
+//-------------------------------------------------------------------------
 
 void
 addElementImageLayerOffsetSource(
@@ -90,6 +95,11 @@ addElementImageLayer(
     IMAGE_LAYER_T *il,
     DISPMANX_DISPLAY_HANDLE_T display,
     DISPMANX_UPDATE_HANDLE_T update);
+
+//-------------------------------------------------------------------------
+
+void writeFlagImageLayer(
+    IMAGE_LAYER_T *il);
 
 void
 changeSourceImageLayer(

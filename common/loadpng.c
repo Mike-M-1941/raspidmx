@@ -25,17 +25,27 @@
 //
 //-------------------------------------------------------------------------
 
+#include <assert.h>
 #include <png.h>
 #include <stdlib.h>
 
 #include "bcm_host.h"
 
+#include "image.h"
 #include "loadpng.h"
+
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
 
 //-------------------------------------------------------------------------
 
 #ifndef ALIGN_TO_16
 #define ALIGN_TO_16(x)  ((x + 15) & ~15)
+#endif
+
+#ifndef ALIGN_TO_32
+#define ALIGN_TO_32(x)  ((x + 31) & ~31)
 #endif
 
 //-------------------------------------------------------------------------
@@ -45,37 +55,36 @@ loadPng(
     IMAGE_T* image,
     const char *file)
 {
+    assert(image != NULL);
+
     FILE* fpin = fopen(file, "rb");
 
-    if (fpin == NULL)
-    {
+    if (fpin == NULL) {
         fprintf(stderr, "loadpng: can't open file for reading\n");
         return false;
     }
 
     //---------------------------------------------------------------------
 
-    png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,
-                                                 NULL,
-                                                 NULL,
-                                                 NULL);
-
-    if (png_ptr == NULL)
-    {
+    png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (png_ptr == NULL) {
+	fclose(fpin);
+	printf("Failed opening '%s' for reading! png_create_read_struct \n", file);
         return false;
     }
 
     png_infop info_ptr = png_create_info_struct(png_ptr);
-
-    if (info_ptr == NULL)
-    {
-        png_destroy_read_struct(&png_ptr, 0, 0);
+    if (info_ptr == NULL) {
+	fclose(fpin);
+        png_destroy_read_struct(&png_ptr, (png_infopp) NULL, (png_infopp) NULL);
+	printf("Failed opening '%s' for reading! png_create_info_struct \n", file);
         return false;
     }
 
-    if (setjmp(png_jmpbuf(png_ptr)))
-    {
-        png_destroy_read_struct(&png_ptr, &info_ptr, 0);
+    if (setjmp(png_jmpbuf(png_ptr))) {
+	fclose(fpin);
+        png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp) NULL);
+	printf("Failed opening '%s' for reading! setjmp \n", file);
         return false;
     }
 
@@ -83,90 +92,53 @@ loadPng(
 
     png_init_io(png_ptr, fpin);
 
-    png_read_info(png_ptr, info_ptr);
+    png_set_sig_bytes(png_ptr, 0);
 
-    //---------------------------------------------------------------------
+    png_read_png(png_ptr, info_ptr, PNG_TRANSFORM_STRIP_16 | PNG_TRANSFORM_PACKING | PNG_TRANSFORM_EXPAND | PNG_TRANSFORM_SHIFT, NULL);
 
-    png_byte colour_type = png_get_color_type(png_ptr, info_ptr);
-    png_byte bit_depth = png_get_bit_depth(png_ptr, info_ptr);
+    png_uint_32		width, height;
+    int			bit_depth, color_type, interlace_type;
+    png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type, &interlace_type, NULL, NULL);
 
-    VC_IMAGE_TYPE_T type = VC_IMAGE_RGB888;
+    int png_Bpp = png_get_rowbytes(png_ptr, info_ptr) / width;
+    //int dstride = width * 4;
+    //int memsize = height * dstride;
+    
+    initImage(image, VC_IMAGE_RGBA32, width, height, false);
 
-    if (colour_type & PNG_COLOR_MASK_ALPHA)
-    {
-        type = VC_IMAGE_RGBA32;
+    png_bytepp row_pointers = png_get_rows(png_ptr, info_ptr);
+
+    int i,j;
+    RGBA8_T rgb;
+
+    if (png_Bpp == 3) {
+	for (i=0; i < height; i++) {
+	    for (j=0; j < width; j++) {
+		png_bytep byt_s = row_pointers[i] + (j * 3);
+		rgb.red   = byt_s[0];
+		rgb.green = byt_s[1];
+		rgb.blue  = byt_s[2];
+		rgb.alpha = 255;
+		setPixelRGB( image, j, i, 1, &rgb );
+	    }
+	}
+    } else
+    if (png_Bpp == 4) {
+	for (i=0; i < height; i++) {
+	    for (j=0; j < width; j++) {
+		png_bytep byt_s = row_pointers[i] + (j * 4);
+		rgb.red   = byt_s[0];
+		rgb.green = byt_s[1];
+		rgb.blue  = byt_s[2];
+		rgb.alpha = byt_s[3];
+		setPixelRGB( image, j, i, 1, &rgb );
+	    }
+	}
     }
-
-    initImage(image,
-              type,
-              png_get_image_width(png_ptr, info_ptr),
-              png_get_image_height(png_ptr, info_ptr),
-              false);
-
-    //---------------------------------------------------------------------
-
-    double gamma = 0.0;
-
-    if (png_get_gAMA(png_ptr, info_ptr, &gamma))
-    {
-        png_set_gamma(png_ptr, 2.2, gamma);
-    }
-
-    //---------------------------------------------------------------------
-
-    if (colour_type == PNG_COLOR_TYPE_PALETTE) 
-    {
-        png_set_palette_to_rgb(png_ptr);
-    }
-
-    if ((colour_type == PNG_COLOR_TYPE_GRAY) && (bit_depth < 8))
-    {
-        png_set_expand_gray_1_2_4_to_8(png_ptr);
-    }
-
-    if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS))
-    {
-        png_set_tRNS_to_alpha(png_ptr);
-    }
-
-    if (bit_depth == 16)
-    {
-#ifdef PNG_READ_SCALE_16_TO_8_SUPPORTED
-        png_set_scale_16(png_ptr);
-#else
-        png_set_strip_16(png_ptr);
-#endif
-    }
-
-    if (colour_type == PNG_COLOR_TYPE_GRAY ||
-        colour_type == PNG_COLOR_TYPE_GRAY_ALPHA)
-    {
-        png_set_gray_to_rgb(png_ptr);
-    }
-
-    //---------------------------------------------------------------------
-
-    png_read_update_info(png_ptr, info_ptr);
-
-    //---------------------------------------------------------------------
-
-    png_bytepp row_pointers = malloc(image->height * sizeof(png_bytep));
-
-    png_uint_32 j = 0;
-    for (j = 0 ; j < image->height ; ++j)
-    {
-        row_pointers[j] = image->buffer + (j * image->pitch);
-    }
-
-    //---------------------------------------------------------------------
-
-    png_read_image(png_ptr, row_pointers);
 
     //---------------------------------------------------------------------
 
     fclose(fpin);
-
-    free(row_pointers);
 
     png_destroy_read_struct(&png_ptr, &info_ptr, 0);
 

@@ -135,6 +135,7 @@ int main(int argc, char *argv[])
     }
     createResourceImageLayer(&imageLayer, 1);
 
+    printf("png image is type %d  bpp %d \n", imageLayer.image.type, imageLayer.image.bitsPerPixel );
     //---------------------------------------------------------------------
 
     if( fontname != NULL) {
